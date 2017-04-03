@@ -55,6 +55,8 @@ class BPRCNN():
 		self.lamda = 1
 		self.learning_rate = 0
 
+		# Setting training parameters: 
+		self.epochs = 1
 
 	def load_trajectory(self, traj, actions):
 
@@ -134,7 +136,8 @@ class BPRCNN():
 
 	def backprop_convolution(self):
 
-		self.compute_sensititives()
+		self.compute_sensiti
+		tives()
 		w = self.w
 		
 		# Set learning rate and lambda value.
@@ -162,11 +165,11 @@ class BPRCNN():
 	def parse_data(self):
 		
 
-	def train_BPRCNN(self):
+	def train_timepoint(self, timepoint):
 
 		# Parse Data:
 			# Set target belief, beta, etc...
-		self.parse_data()
+		self.parse_data(timepoint)
 
 		# Construct the from_extended_state for belief propagation
 		self.construct_from_ext_state()
@@ -183,6 +186,37 @@ class BPRCNN():
 		# Recurrence. 
 		self.recurrence()
 
+	def train_BPRCNN(self):
+
+		# Iterate over number of epochs.
+		# Similar to QMDP Training paradigm.
+		for i in range(self.epochs):
+			# Sequential training; later implement Shuffling / Experience Replay.
+			for j in range(len(self.traj)):
+				self.train_timepoint(j)
+
+
+def main(args):    
+
+	bprcnn = BPRCNN()
+
+	# Load a numpy file of CSV.
+	# traj_csv = npy.load(str(sys.argv[1]))
+
+	# Load the CSV file, ignore first line.
+	traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
+	
+	# Pick up linear velocities.
+	actions = traj_csv[:,7:10]
+
+	# Position states.
+	traj = traj[:,0:3]
+
+	bprcnn.load_trajectory(traj,actions)
+	bprcnn.train_BPRCNN()
+
+if __name__ == '__main__':
+    main(sys.argv)
 
 
 
