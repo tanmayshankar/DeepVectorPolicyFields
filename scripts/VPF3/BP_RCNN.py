@@ -162,8 +162,88 @@ class BPRCNN():
 		# With Teacher Forcing: Setting next belief to the previous target / ground truth.
 		self.from_state_belief = copy.deepcopy(self.target_belief)
 
+	def _powerset(self, iterable):
+		
+		# "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+		# Taken from itertools recipes in Python docs.
+		s = list(iterable)
+		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+	def interpolate_coefficients(self, point):
+
+		base_indices = npy.floor((point-self.lower)/self.grid_cell_size)
+		base_point = self.grid_cell_size*npy.floor(point/self.grid_cell_size)		
+		base_lengths = point - base_point
+		bases = []
+
+		for index_set in self._powerset(range(self.dimensions)):
+			index_set = set(index_set)
+			volume = 1 
+			point_to_add = base_point.copy()
+			index_to_add = base_indices.copy()
+
+			for i in range(self.dimensions):
+				if i in index_set:
+					side_length = base_lengths[i]			
+					point_to_add += self.grid_cell_size
+					index_to_add[i] += 1
+				else:
+					side_length = self.grid_cell_size - base_lengths[i]
+
+				volume *= side_length / self.grid_cell_size
+
+			bases.append((volume, point_to_add, index_to_add))			
+			# bases.append((volume, index_to_add))			
+
+		return bases
+
+	# def interpolate(self, point):
+
+	# 	base_point = self.grid_cell_size*npy.floor(point/self.grid_cell_size)
+	# 	base_lengths = point - base_point
+	# 	bases = []
+
+	# 	# for index_set in self._powerset(range(len(point))):
+		
+	# 	for index_set in self._powerset(range(self.dimensions)):
+	# 		index_set = set(index_set)
+	# 		volume = 1
+	# 		point_to_add = base_point.copy()
+
+	# 		for i in range(self.dimensions):
+	# 			if i in index_set:
+	# 				side_length = base_lengths[i] 
+	# 				point_to_add[i] += self.grid_cell_size
+
+
+	# # ALEX's ORIGINAL INTERPOLATION FUNCTION
+	# def interpolate(self, grid_cell_size, point):
+		
+	# 	# ''' Multilinear interpolation on a fixed grid of equal size cells '''
+
+	# 	base_point = grid_cell_size * npy.floor(point / grid_cell_size)
+	# 	base_lengths = point - base_point
+	# 	bases = []
+	# 	for index_set in self._powerset(range(len(point))):
+	# 		index_set = set(index_set)
+	# 		volume = 1
+	# 		point_to_add = base_point.copy()
+	# 		for i in range(len(point)):
+	# 			if i in index_set:
+	# 				side_length = base_lengths[i]
+	# 				point_to_add[i] += grid_cell_size
+	# 			else:
+	# 				side_length = grid_cell_size - base_lengths[i]
+
+	# 			volume *= side_length / grid_cell_size
+
+	# 		bases.append((volume, point_to_add))
+
+	# 	return bases
+
 	def parse_data(self):
 		
+
 
 	def train_timepoint(self, timepoint):
 
