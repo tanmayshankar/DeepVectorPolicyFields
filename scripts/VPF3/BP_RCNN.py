@@ -8,8 +8,21 @@ class BPRCNN():
 
 		# Defining common variables.
 		self.discrete = 50
+		self.discrete_x = 50
+		self.discrete_y = 50
+		self.discrete_z = 10
+
 		self.dimensions = 3
-		self.action_size = 6
+		# self.action_size = 6
+		self.action_size = 27
+
+		# Setting discretization variables
+		self.action_lower = -1
+		self.action_cell = 1
+		# Assuming lower is along all dimensions. 
+		self.traj_lower = -1
+		self.traj_cell = 0.1
+
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
 
@@ -20,24 +33,24 @@ class BPRCNN():
 		# Defining observation model.
 		self.obs_space = 5
 		
-		# Defining Value function, policy, etc. 
-		self.value_function = npy.zeros((self.discrete, self.discrete, self.discrete))
-		self.policy = npy.zeros((self.discrete, self.discrete, self.discrete))
+		# Defining Value function, policy, etc. 	
+		self.value_function = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
+		self.policy = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
 
 		# Discount
 		self.gamma = 0.95
 
 		# Defining belief variables.
-		self.from_state_belief = npy.zeros((self.discrete,self.discrete,self.discrete))
-		self.to_state_belief = npy.zeros((self.discrete,self.discrete,self.discrete))
-		self.target_belief = npy.zeros((self.discrete,self.discrete,self.discrete))
-		# self.corrected_to_state_belief = npy.zeros((self.discrete,self.discrete,self.discrete))
-		self.intermed_belief = npy.zeros((self.discrete,self.discrete,self.discrete))
+		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		# self.corrected_to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
-		self.to_state_ext = npy.zeros((self.discrete+2*self.w,self.discrete+2*self.w,self.discrete+2*self.w))
-		self.from_state_ext = npy.zeros((self.discrete+2*self.w,self.discrete+2*self.w,self.discrete+2*self.w))
+		self.to_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
+		self.from_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 
 		# Defining trajectory
 		self.traj = []
@@ -48,7 +61,7 @@ class BPRCNN():
 		self.obs_space = 3
 		self.obs_model = npy.zeros((self.obs_space,self.obs_space,self.obs_space))
 		self.h = self.obs_space/2
-		self.extended_obs_belief = npy.zeros((self.obs_space+self.h*2,self.obs_space+self.h*2,self.obs_space+self.h*2))
+		self.extended_obs_belief = npy.zeros((self.discrete_x+self.h*2,self.discrete_y+self.h*2,self.discrete_z+self.h*2))
 
 		# Setting hyperparameters
 		self.time_count = 0
@@ -67,8 +80,9 @@ class BPRCNN():
 	def construct_from_ext_state(self):
 
 		w = self.w
-		d = self.discrete
-		self.from_state_ext[w:d+w,w:d+w,w:d+w] = copy.deepcopy(self.from_state_ext)
+		d = self.discrete_x
+		# self.from_state_ext[w:d+w,w:d+w,w:d+w] = copy.deepcopy(self.from_state_ext)
+		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_ext)
 
 	# def motion_update(self):
 
@@ -84,7 +98,9 @@ class BPRCNN():
 		# Implements the motion update of the Bayes Filter.
 
 		w = self.w
-		d = self.discrete
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
 
 		self.to_state_ext[:,:,:] = 0
 		self.update_beta()
@@ -101,26 +117,28 @@ class BPRCNN():
 			self.to_state_ext[:,:,i+1] += self.to_state_ext[:,:,i]
 			self.to_state_ext[:,:,i] = 0
 
-			self.to_state_ext[d+2*w-i-2,:,:] += self.to_state_ext[d+2*w-i-1,:,:]
-			self.to_state_ext[d+2*w-i-1,:,:] = 0
-			self.to_state_ext[:,d+2*w-i-2,:] += self.to_state_ext[:,d+2*w-i-1,:]
-			self.to_state_ext[:,d+2*w-i-1,:] = 0
-			self.to_state_ext[:,:,d+2*w-i-2] += self.to_state_ext[d+2*w-i-1,:,:]
-			self.to_state_ext[:,:,d+2*w-i-1] = 0
+			self.to_state_ext[dx+2*w-i-2,:,:] += self.to_state_ext[dx+2*w-i-1,:,:]
+			self.to_state_ext[dx+2*w-i-1,:,:] = 0
+			self.to_state_ext[:,dy+2*w-i-2,:] += self.to_state_ext[:,dy+2*w-i-1,:]
+			self.to_state_ext[:,dy+2*w-i-1,:] = 0
+			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
+			self.to_state_ext[:,:,dz+2*w-i-1] = 0
 		
-		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:d+w,w:d+w,w:d+w])
+		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
 
-		d = self.discrete
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
 		h = self.h
 		obs = self.observed_state
 		
-		self.extended_obs_belief[h:d+h,h:d+h,h:d+h] = self.intermed_belief
+		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief
 		self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
 
-		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:d+h,h:d+h,h:d+h])
+		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
 
 	def compute_sensititives(self):
@@ -163,9 +181,7 @@ class BPRCNN():
 		self.from_state_belief = copy.deepcopy(self.target_belief)
 
 	def _powerset(self, iterable):
-		
 		# "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
-		# Taken from itertools recipes in Python docs.
 		s = list(iterable)
 		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
@@ -174,8 +190,11 @@ class BPRCNN():
 
 		# Choose whether we are interpolating a trajectory or an action data point.
 		# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
-		lower = traj_or_action * self.traj_lower + (1-traj_or_action)*self.action_lower
-		grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*1
+		# lower = traj_or_action * self.traj_lower + (1-traj_or_action)*self.action_lower
+
+		# Now lower is just uniformly -1. 
+		lower = -1
+		grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
 
 		base_indices = npy.floor((point-lower)/grid_cell_size)
 		base_point = sgrid_cell_size*npy.floor(point/grid_cell_size)		
@@ -237,11 +256,32 @@ class BPRCNN():
 
 	# 	return bases
 
+	def map_triplet_to_action(self, triplet):
+
+		# Assuming the triplets are indices, not the coordinates of the point
+		# at which the action is being interpolated.
+		return (triplet[0]+triplet[1]*3+triplet[2]*9)
+
 	def preprocess_trajectory(self):
 
-		for t in range(len(self.traj)):
+		# Normalize trajectory.
+		norm_vector = [2.5,2.5,1.]
+		self.traj /= norm_vector
 
-			self.
+		# Normalize actions (velocities).
+		vel_norm_vector = npy.max(abs(self.actions),axis=0)
+		self.actions /= vel_norm_vector
+
+		for t in range(len(self.traj)):
+			
+			# Trajectory. 
+			self.interpolate_coefficients(self.traj[t],1)
+
+			# Action. 
+
+
+			self.interpolate_coefficients(self.actions[t]/npy.linalg.norm(self.actions[t]),0)
+
 
 	def parse_data(self):
 		# Preprocess data? 
@@ -278,28 +318,22 @@ class BPRCNN():
 			for j in range(len(self.traj)):
 				self.train_timepoint(j)
 
-
 def main(args):    
 
 	bprcnn = BPRCNN()
 
-	# Load a numpy file of CSV.
-	# traj_csv = npy.load(str(sys.argv[1]))
-
 	# Load the CSV file, ignore first line.
 	traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
 	
-	# Pick up linear velocities.
-	actions = traj_csv[:,7:10]
+	# Pick up trajectories and linear velocities as actions.
+	bprcnn.load_trajectory(traj_csv[:,:3], traj_cs[:,7:10])
+	bprcnn.preprocess_trajectory()
 
-	# Position states.
-	traj = traj[:,0:3]
-
-	bprcnn.load_trajectory(traj,actions)
 	bprcnn.train_BPRCNN()
 
 if __name__ == '__main__':
     main(sys.argv)
+
 
 
 
