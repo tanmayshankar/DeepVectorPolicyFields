@@ -93,9 +93,12 @@ class BPRCNN():
 		self.beta = npy.zeros(self.action_size)
 
 		# Defining observation model related variables. 
-		self.obs_space = 3
+		self.obs_space = 4
 		self.obs_model = npy.zeros((self.obs_space,self.obs_space,self.obs_space))
-		self.h = self.obs_space/2
+		# Apparently it was only /2 for obs_space=3. Actually should be -1. 
+		# self.h = self.obs_space/2 
+
+		self.h = self.obs_space-1
 		self.extended_obs_belief = npy.zeros((self.discrete_x+self.h*2,self.discrete_y+self.h*2,self.discrete_z+self.h*2))
 
 		# Setting hyperparameters
@@ -116,26 +119,27 @@ class BPRCNN():
 
 		self.interp_traj_percent = npy.zeros((len(traj),8))
 		self.interp_vel_percent = npy.zeros((len(traj),8))
-		# bprcnn.preprocess_trajectory()
+		
 		self.preprocess_trajectory()
+		self.initialize_pointset()
+
+	def initialize_pointset(self):
+
+		self.pointset = npy.zeros((64,3))
+		add = [-1,0,1,2]
+
+		for i in range(4):
+			for j in range(4):
+				for k in range(4):
+					self.pointset[16*i+4*j+k] = [add[i],add[j],add[k]]
+
+		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
+		# self.pointset = (self.pointset+1).astype(int)
 
 	def construct_from_ext_state(self):
 
 		w = self.w
-		# d = self.discrete_x
-
-		# self.from_state_ext[w:d+w,w:d+w,w:d+w] = copy.deepcopy(self.from_state_belief)
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
-
-	# def motion_update(self):
-
-	# def update_beta(self, act):
-	# 	# Update the beta values in order to predict intermediate belief. 
-
-	# 	# beta : LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP.
-	# 	# Assuming 6 cardinal directions for now. May need to change to Trilinear interpolation. 
-	# 	act /= npy.linalg.norm(act)		
-	# 	self.beta = npy.array([act[0]*(act[0]<0),act[0]*(act[0]>=0),act[1]*(act[1]<0),act[1]*(act[1]>=0),act[2]*(act[2]<0),act[2]*(act[2]>=0)])
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -146,7 +150,6 @@ class BPRCNN():
 		dz = self.discrete_z
 
 		self.to_state_ext[:,:,:] = 0
-		# self.update_beta()
 
 		for k in range(self.action_size):
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
@@ -176,10 +179,16 @@ class BPRCNN():
 		dy = self.discrete_y
 		dz = self.discrete_z
 		h = self.h
-		obs = self.observed_state
-		
-		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief
-		self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
+		# obs = npy.floor(self.observed_state)
+
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
+
+		# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
+		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
+		self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
+
+		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
+		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
 
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
@@ -313,40 +322,6 @@ class BPRCNN():
 
 	# 	return bases
 
-	# def interpolate_coefficients(self, point, traj_or_action=1):
-	# # def interpolate_coefficients(self, point):
-
-	# 	# Choose whether we are interpolating a trajectory or an action data point.
-	# 	# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
-	# 	lower = traj_or_action * self.traj_lower + (1-traj_or_action)*self.action_lower
-	# 	grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*1
-
-	# 	base_indices = npy.floor((point-self.lower)/self.grid_cell_size)
-	# 	base_point = self.grid_cell_size*npy.floor(point/self.grid_cell_size)		
-	# 	base_lengths = point - base_point
-	# 	bases = []
-
-	# 	for index_set in self._powerset(range(self.dimensions)):
-	# 		index_set = set(index_set)
-	# 		volume = 1 
-	# 		# point_to_add = base_point.copy()
-	# 		index_to_add = base_indices.copy()
-
-	# 		for i in range(self.dimensions):
-	# 			if i in index_set:
-	# 				side_length = base_lengths[i]			
-	# 				# point_to_add += self.grid_cell_size
-	# 				index_to_add[i] += 1
-	# 			else:
-	# 				side_length = self.grid_cell_size - base_lengths[i]
-
-	# 			volume *= side_length / self.grid_cell_size
-
-	# 		# bases.append((volume, point_to_add, index_to_add))			
-	# 		bases.append((volume, index_to_add))			
-
-	# 	return bases
-
 	def map_triplet_to_action(self, triplet):
 
 		# Assuming the triplets are indices, not the coordinates of the point
@@ -407,6 +382,11 @@ class BPRCNN():
 		# Must also set the target belief. 
 			self.target_belief[self.interp_traj[timepoint+1,k,0],self.interp_traj[timepoint+1,k,1],self.interp_traj[timepoint+1,k,2]] = self.interp_traj_percent[timepoint+1,k]
 
+		self.observed_state = self.orig_traj[timepoint]
+		mean = self.observed_state - self.grid_cell_size*npy.floor(self.observed_state/self.grid_cell_size)
+		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.001)
+		self.obs_model /= self.obs_model.sum()
+
 	def train_timepoint(self, timepoint):
 
 		# Parse Data:
@@ -430,6 +410,8 @@ class BPRCNN():
 		self.recurrence()
 
 	def train_BPRCNN(self):
+
+
 
 		# Iterate over number of epochs.
 
