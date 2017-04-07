@@ -198,11 +198,14 @@ class BPRCNN():
 		# Compute the sensitivity values. 
 		self.sensitivity = self.target_belief - self.from_state_belief
 
-		obs = self.observed_state
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
 		h = self.h
 
 		# Redefining the sensitivity values to be (target_b - pred_b)*obs_model = F.
-		self.sensitivity = npy.multiply(self.sensitivity[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
+		# self.sensitivity = npy.multiply(self.sensitivity[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
+
+		# UPDATING TO THE GAUSSIAN KERNEL OBSERVATION MODEL AGAIN:
+		self.sensitivity = npy.multiply(self.sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 
 	def backprop_convolution(self):
 
