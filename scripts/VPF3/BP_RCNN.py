@@ -21,14 +21,14 @@ class BPRCNN():
 		self.action_upper = +1
 		self.action_cell = npy.ones(self.dimensions)
 
-		# Assuming lower is along all dimensions. 
-		self.traj_lower = -1
+		# Assuming lower is along all dimensions. 		
+		self.traj_lower = npy.array([-1,-1,0])
 		self.traj_upper = +1
 		# self.traj_cell = 0.1
 		# self.traj_cell = (self.traj_upper-self.traj_lower)/self.
 
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]
-		self.grid_cell_size[2] = 1./self.discrete_z
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
+		# self.grid_cell_size[2] = 1./self.discrete_z
 
 		# self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		self.action_space = npy.array([ [-1., -1., -1.],
@@ -80,6 +80,7 @@ class BPRCNN():
 		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		# self.corrected_to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
@@ -104,7 +105,8 @@ class BPRCNN():
 		# Setting hyperparameters
 		self.time_count = 0
 		self.lamda = 1
-		self.learning_rate = 0
+		self.learning_rate = 0.05
+		self.annealing_rate = 0.
 
 		# Setting training parameters: 
 		self.epochs = 1
@@ -178,10 +180,12 @@ class BPRCNN():
 		dx = self.discrete_x
 		dy = self.discrete_y
 		dz = self.discrete_z
-		h = self.h
-		# obs = npy.floor(self.observed_state)
+		
+		# h = self.h
+		# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
 
-		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
+		h = self.h
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
 
 		# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
 		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
@@ -193,23 +197,48 @@ class BPRCNN():
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
 
-	def compute_sensititives(self):
+	def compute_sensitivities(self):
 
 		# Compute the sensitivity values. 
 		self.sensitivity = self.target_belief - self.from_state_belief
 
-		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+
+		# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
 		h = self.h
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
 
 		# Redefining the sensitivity values to be (target_b - pred_b)*obs_model = F.
 		# self.sensitivity = npy.multiply(self.sensitivity[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
 
 		# UPDATING TO THE GAUSSIAN KERNEL OBSERVATION MODEL AGAIN:
-		self.sensitivity = npy.multiply(self.sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
+		intermediate_sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))
+		intermediate_sensitivity[h:dx+h,h:dy+h,h:dz+h] = self.sensitivity.copy()		
+		self.sensitivity = npy.multiply(intermediate_sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)		
+
+	def compute_sensitivity(self):
+
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+		h = self.h
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
+
+		intermediate_sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))
+		intermediate_sensitivity[h:dx+h,h:dy+h,h:dz+h] = self.target_belief - self.from_state_belief
+
+		# self.sensitivity[:,:,:] = 0
+		self.sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))		
+		 
+		self.sensitivity[h+obs[0]-1:h+obs[0]+3,h+obs[1]-1:h+obs[1]+3,h+obs[2]-1:h+obs[2]+3] = npy.multiply(intermediate_sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
+		self.sensitivity = self.sensitivity[h:dx+h,h:dy+h,h:dz+h]
 
 	def backprop_convolution(self):
 
-		self.compute_sensititives()
+		# self.compute_sensitivities()
+		self.compute_sensitivity()
 		w = self.w
 		
 		# Set learning rate and lambda value.
@@ -218,8 +247,8 @@ class BPRCNN():
 		alpha = self.learning_rate - self.annealing_rate*self.time_count
 
 		# Calculate basic gradient update. 
-		grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity, 'valid')
-		
+		grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity,'valid')		
+
 		t0 = npy.zeros((self.trans_space,self.trans_space,self.trans_space))
 		t1 = npy.ones((self.trans_space,self.trans_space,self.trans_space))
 
@@ -414,10 +443,7 @@ class BPRCNN():
 
 	def train_BPRCNN(self):
 
-
-
 		# Iterate over number of epochs.
-
 		# Similar to QMDP Training paradigm.
 		for i in range(self.epochs):
 
