@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from headers import *
-from variables import *
+# from variables import *
 
 class BPRCNN():
 
@@ -18,12 +18,46 @@ class BPRCNN():
 
 		# Setting discretization variables
 		self.action_lower = -1
-		self.action_cell = 1
+		self.action_upper = +1
+		self.action_cell = npy.ones(self.dimensions)
+
 		# Assuming lower is along all dimensions. 
 		self.traj_lower = -1
-		self.traj_cell = 0.1
+		self.traj_upper = +1
+		# self.traj_cell = 0.1
+		# self.traj_cell = (self.traj_upper-self.traj_lower)/self.
 
-		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]
+		self.grid_cell_size[2] = 1./self.discrete_z
+
+		# self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
+		self.action_space = npy.array([ [-1., -1., -1.],
+										[ 0., -1., -1.],
+										[ 1., -1., -1.],
+										[-1.,  0., -1.],
+										[ 0.,  0., -1.],
+										[ 1.,  0., -1.],
+										[-1.,  1., -1.],
+										[ 0.,  1., -1.],
+										[ 1.,  1., -1.],
+										[-1., -1.,  0.],
+										[ 0., -1.,  0.],
+										[ 1., -1.,  0.],
+										[-1.,  0.,  0.],
+										[ 0.,  0.,  0.],
+										[ 1.,  0.,  0.],
+										[-1.,  1.,  0.],
+										[ 0.,  1.,  0.],
+										[ 1.,  1.,  0.],
+										[-1., -1.,  1.],
+										[ 0., -1.,  1.],
+										[ 1., -1.,  1.],
+										[-1.,  0.,  1.],
+										[ 0.,  0.,  1.],
+										[ 1.,  0.,  1.],
+										[-1.,  1.,  1.],
+										[ 0.,  1.,  1.],
+										[ 1.,  1.,  1.]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
 
 		# Defining transition model.
@@ -53,8 +87,9 @@ class BPRCNN():
 		self.from_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 
 		# Defining trajectory
-		self.traj = []
-		self.actions = []
+		self.orig_traj = []
+		self.orig_vel = []
+
 		self.beta = npy.zeros(self.action_size)
 
 		# Defining observation model related variables. 
@@ -74,25 +109,33 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		self.traj = traj
-		self.actions = actions
+		self.orig_traj = traj
+		self.orig_vel = actions
+		self.interp_traj = npy.zeros((len(traj),8,3),dtype='int')
+		self.interp_vel = npy.zeros((len(traj),8,3),dtype='int')
+
+		self.interp_traj_percent = npy.zeros((len(traj),8))
+		self.interp_vel_percent = npy.zeros((len(traj),8))
+		# bprcnn.preprocess_trajectory()
+		self.preprocess_trajectory()
 
 	def construct_from_ext_state(self):
 
 		w = self.w
-		d = self.discrete_x
-		# self.from_state_ext[w:d+w,w:d+w,w:d+w] = copy.deepcopy(self.from_state_ext)
-		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_ext)
+		# d = self.discrete_x
+
+		# self.from_state_ext[w:d+w,w:d+w,w:d+w] = copy.deepcopy(self.from_state_belief)
+		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
 
 	# def motion_update(self):
 
-	def update_beta(self, act):
-		# Update the beta values in order to predict intermediate belief. 
+	# def update_beta(self, act):
+	# 	# Update the beta values in order to predict intermediate belief. 
 
-		# beta : LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP.
-		# Assuming 6 cardinal directions for now. May need to change to Trilinear interpolation. 
-		act /= npy.linalg.norm(act)		
-		self.beta = npy.array([act[0]*(act[0]<0),act[0]*(act[0]>=0),act[1]*(act[1]<0),act[1]*(act[1]>=0),act[2]*(act[2]<0),act[2]*(act[2]>=0)])
+	# 	# beta : LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP.
+	# 	# Assuming 6 cardinal directions for now. May need to change to Trilinear interpolation. 
+	# 	act /= npy.linalg.norm(act)		
+	# 	self.beta = npy.array([act[0]*(act[0]<0),act[0]*(act[0]>=0),act[1]*(act[1]<0),act[1]*(act[1]>=0),act[2]*(act[2]<0),act[2]*(act[2]>=0)])
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -103,10 +146,10 @@ class BPRCNN():
 		dz = self.discrete_z
 
 		self.to_state_ext[:,:,:] = 0
-		self.update_beta()
+		# self.update_beta()
 
 		for k in range(self.action_size):
-			self.to_state_ext += beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
+			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
 		# Folding over the extended belief:
 		for i in range(w):			
@@ -154,8 +197,7 @@ class BPRCNN():
 
 	def backprop_convolution(self):
 
-		self.compute_sensiti
-		tives()
+		self.compute_sensititives()
 		w = self.w
 		
 		# Set learning rate and lambda value.
@@ -185,19 +227,25 @@ class BPRCNN():
 		s = list(iterable)
 		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
+
+# VARIABLE GRID SIZE ALONG DIFFERENT DIMENSIONS:
 	def interpolate_coefficients(self, point, traj_or_action=1):
 	# def interpolate_coefficients(self, point):
 
 		# Choose whether we are interpolating a trajectory or an action data point.
-		# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
-		# lower = traj_or_action * self.traj_lower + (1-traj_or_action)*self.action_lower
 
 		# Now lower is just uniformly -1. 
-		lower = -1
-		grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
+		lower = -npy.ones(3)
+
+		# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
+		# If trajectory, z lower must be 0.
+		lower[2] += traj_or_action
+
+		# grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
+		grid_cell_size = traj_or_action*self.grid_cell_size + (1-traj_or_action)*self.action_cell
 
 		base_indices = npy.floor((point-lower)/grid_cell_size)
-		base_point = sgrid_cell_size*npy.floor(point/grid_cell_size)		
+		base_point = grid_cell_size*npy.floor(point/grid_cell_size)		
 		base_lengths = point - base_point
 		bases = []
 
@@ -210,17 +258,60 @@ class BPRCNN():
 			for i in range(self.dimensions):
 				if i in index_set:
 					side_length = base_lengths[i]			
-					# point_to_add += self.grid_cell_size
+					# point_to_add += self.grid_cell_size[i]
 					index_to_add[i] += 1
 				else:
-					side_length = self.grid_cell_size - base_lengths[i]
+					side_length = grid_cell_size[i] - base_lengths[i]
 
-				volume *= side_length / grid_cell_size
+				volume *= side_length / grid_cell_size[i]
 
 			# bases.append((volume, point_to_add, index_to_add))			
 			bases.append((volume, index_to_add))			
 
 		return bases
+
+
+# CONSTANT GRID SIZE ALONG ALL DIMENSIONS:
+	# def interpolate_coefficients(self, point, traj_or_action=1):
+	# # def interpolate_coefficients(self, point):
+
+	# 	# Choose whether we are interpolating a trajectory or an action data point.
+
+	# 	# Now lower is just uniformly -1. 
+	# 	lower = -npy.ones(3)
+
+	# 	# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
+	# 	# If trajectory, z lower must be 0.
+	# 	lower[2] += traj_or_action
+
+	# 	grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
+		
+
+	# 	base_indices = npy.floor((point-lower)/grid_cell_size)
+	# 	base_point = grid_cell_size*npy.floor(point/grid_cell_size)		
+	# 	base_lengths = point - base_point
+	# 	bases = []
+
+	# 	for index_set in self._powerset(range(self.dimensions)):
+	# 		index_set = set(index_set)
+	# 		volume = 1 
+	# 		# point_to_add = base_point.copy()
+	# 		index_to_add = base_indices.copy()
+
+	# 		for i in range(self.dimensions):
+	# 			if i in index_set:
+	# 				side_length = base_lengths[i]			
+	# 				# point_to_add += self.grid_cell_size
+	# 				index_to_add[i] += 1
+	# 			else:
+	# 				side_length = grid_cell_size - base_lengths[i]
+
+	# 			volume *= side_length / grid_cell_size
+
+	# 		# bases.append((volume, point_to_add, index_to_add))			
+	# 		bases.append((volume, index_to_add))			
+
+	# 	return bases
 
 	# def interpolate_coefficients(self, point, traj_or_action=1):
 	# # def interpolate_coefficients(self, point):
@@ -264,34 +355,63 @@ class BPRCNN():
 
 	def preprocess_trajectory(self):
 
+		print("Preprocessing the Data.")
+
 		# Normalize trajectory.
 		norm_vector = [2.5,2.5,1.]
-		self.traj /= norm_vector
+		self.orig_traj /= norm_vector
 
 		# Normalize actions (velocities).
-		vel_norm_vector = npy.max(abs(self.actions),axis=0)
-		self.actions /= vel_norm_vector
+		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		self.orig_vel /= vel_norm_vector
 
-		for t in range(len(self.traj)):
+		# for t in range(len(self.traj)):
+		for t in range(len(self.orig_traj)):
 			
 			# Trajectory. 
-			self.interpolate_coefficients(self.traj[t],1)
+			split = self.interpolate_coefficients(self.orig_traj[t],1)
+			count = 0
+			for percent, indices in split: 
+				self.interp_traj[t,count] = indices
+				self.interp_traj_percent[t,count] = percent
+				count += 1
 
 			# Action. 
+			# split = self.interpolate_coefficients(self.actions[t]/npy.linalg.norm(self.actions[t]),0)
+			split = self.interpolate_coefficients(self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t]),0)
+			count = 0
+			for percent, indices in split:
+				self.interp_vel[t,count] = indices
+				self.interp_vel_percent[t,count] = percent
 
+		npy.save("Interp_Traj.npy",self.interp_traj)
+		npy.save("Interp_Vel.npy",self.interp_vel)
+		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
+		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
 
-			self.interpolate_coefficients(self.actions[t]/npy.linalg.norm(self.actions[t]),0)
-
-
-	def parse_data(self):
+	def parse_data(self, timepoint):
 		# Preprocess data? 
 
+		# Setting from state belief from interp_traj.
+		# For each of the 8 grid points, set the value of belief = percent at that point. 
+		# This should sum to 1.
+		for k in range(8):
+			
+			self.from_state_belief[self.interp_traj[timepoint,k,0],self.interp_traj[timepoint,k,1],self.interp_traj[timepoint,k,2]] = self.interp_traj_percent[timepoint,k]
 
+			# Setting beta.
+			# Map triplet indices to action index, set that value of beta to percent.
+			# self.beta[self.map_triplet_to_action(self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2])] = self.interp_vel[timepoint,k,3] 
+			self.beta[self.map_triplet_to_action([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
+
+		# Must also set the target belief. 
+			self.target_belief[self.interp_traj[timepoint+1,k,0],self.interp_traj[timepoint+1,k,1],self.interp_traj[timepoint+1,k,2]] = self.interp_traj_percent[timepoint+1,k]
 
 	def train_timepoint(self, timepoint):
 
 		# Parse Data:
 			# Set target belief, beta, etc...
+
 		self.parse_data(timepoint)
 
 		# Construct the from_extended_state for belief propagation
@@ -312,11 +432,23 @@ class BPRCNN():
 	def train_BPRCNN(self):
 
 		# Iterate over number of epochs.
+
 		# Similar to QMDP Training paradigm.
 		for i in range(self.epochs):
+
+			print("Training Epoch: ",i)
+
 			# Sequential training; later implement Shuffling / Experience Replay.
-			for j in range(len(self.traj)):
+			# for j in range(len(self.traj)-1):
+			for j in range(len(self.interp_traj)-1):
+				print("Training Time Step:",j)
 				self.train_timepoint(j)
+
+			print("Saving the Model.")
+			self.save_model()
+
+	def save_model(self):
+		npy.save("Learnt_Transition.npy",self.trans)
 
 def main(args):    
 
@@ -326,13 +458,11 @@ def main(args):
 	traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
 	
 	# Pick up trajectories and linear velocities as actions.
-	bprcnn.load_trajectory(traj_csv[:,:3], traj_cs[:,7:10])
-	bprcnn.preprocess_trajectory()
-
+	bprcnn.load_trajectory(traj_csv[:,:3], traj_csv[:,7:10])
 	bprcnn.train_BPRCNN()
 
 if __name__ == '__main__':
-    main(sys.argv)
+	main(sys.argv)
 
 
 
