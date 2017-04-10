@@ -362,7 +362,8 @@ class BPRCNN():
 
 		# Assuming the triplets are indices, not the coordinates of the point
 		# at which the action is being interpolated.
-		return (triplet[0]+triplet[1]*3+triplet[2]*9)
+		# return (triplet[0]+triplet[1]*3+triplet[2]*9)
+		return (triplet[0]*9+triplet[1]*3+triplet[2])
 
 	def preprocess_trajectory(self):
 
