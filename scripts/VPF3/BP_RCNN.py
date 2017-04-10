@@ -114,13 +114,17 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		self.orig_traj = traj
-		self.orig_vel = actions
-		self.interp_traj = npy.zeros((len(traj),8,3),dtype='int')
-		self.interp_vel = npy.zeros((len(traj),8,3),dtype='int')
+		self.orig_traj = traj[0:len(traj):20,:]
+		self.orig_vel = actions[0:len(traj):20,:]
 
-		self.interp_traj_percent = npy.zeros((len(traj),8))
-		self.interp_vel_percent = npy.zeros((len(traj),8))
+		# self.orig_traj = traj
+		# self.orig_vel = actions
+
+		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
+		self.interp_vel = npy.zeros((len(self.orig_traj),8,3),dtype='int')
+
+		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
+		self.interp_vel_percent = npy.zeros((len(self.orig_traj),8))
 		
 		self.preprocess_trajectory()
 		self.initialize_pointset()
