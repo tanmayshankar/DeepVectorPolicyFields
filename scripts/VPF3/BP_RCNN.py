@@ -117,6 +117,9 @@ class BPRCNN():
 		self.orig_traj = traj[0:len(traj):20,:]
 		self.orig_vel = actions[0:len(traj):20,:]
 
+		self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
+
 		# self.orig_traj = traj
 		# self.orig_vel = actions
 
