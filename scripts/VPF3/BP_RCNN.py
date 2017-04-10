@@ -390,6 +390,7 @@ class BPRCNN():
 			for percent, indices in split:
 				self.interp_vel[t,count] = indices
 				self.interp_vel_percent[t,count] = percent
+				count += 1
 
 		npy.save("Interp_Traj.npy",self.interp_traj)
 		npy.save("Interp_Vel.npy",self.interp_vel)
