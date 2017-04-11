@@ -376,8 +376,8 @@ class BPRCNN():
 		print("Preprocessing the Data.")
 
 		# Normalize trajectory.
-		# norm_vector = [2.5,2.5,1.]
-		norm_vector = [3.,3.,3.]
+		norm_vector = [2.5,2.5,1.]
+		# norm_vector = [3.,3.,3.]
 		self.orig_traj /= norm_vector
 
 		# Normalize actions (velocities).
