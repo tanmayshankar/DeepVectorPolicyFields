@@ -66,6 +66,7 @@ class BPRCNN():
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 		
+		self.action_counter = npy.zeros(self.action_size)
 		# Defining observation model.
 		self.obs_space = 5
 		
@@ -414,6 +415,8 @@ class BPRCNN():
 		# Setting from state belief from interp_traj.
 		# For each of the 8 grid points, set the value of belief = percent at that point. 
 		# This should sum to 1.
+		self.beta[:] = 0.
+
 		for k in range(8):
 			
 			self.from_state_belief[self.interp_traj[timepoint,k,0],self.interp_traj[timepoint,k,1],self.interp_traj[timepoint,k,2]] = self.interp_traj_percent[timepoint,k]
@@ -421,11 +424,13 @@ class BPRCNN():
 			# Setting beta.
 			# Map triplet indices to action index, set that value of beta to percent.
 			# self.beta[self.map_triplet_to_action(self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2])] = self.interp_vel[timepoint,k,3] 
+			
 			self.beta[self.map_triplet_to_action([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
 
 		# Must also set the target belief. 
 			self.target_belief[self.interp_traj[timepoint+1,k,0],self.interp_traj[timepoint+1,k,1],self.interp_traj[timepoint+1,k,2]] = self.interp_traj_percent[timepoint+1,k]
 
+		self.action_counter += self.beta
 		self.observed_state = self.orig_traj[timepoint]
 		mean = self.observed_state - self.grid_cell_size*npy.floor(self.observed_state/self.grid_cell_size)
 		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.001)
