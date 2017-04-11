@@ -63,6 +63,8 @@ class BPRCNN():
 		# Defining transition model.
 		self.trans_space = 3
 		self.trans = npy.random.random((self.action_size,self.trans_space,self.trans_space, self.trans_space))
+		for k in range(self.action_size):
+			self.trans[k] /= self.trans[k].sum()
 		
 		# Defining observation model.
 		self.obs_space = 5
@@ -234,7 +236,7 @@ class BPRCNN():
 		dz = self.discrete_z
 
 		intermediate_sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))
-		intermediate_sensitivity[h:dx+h,h:dy+h,h:dz+h] = self.target_belief - self.from_state_belief
+		intermediate_sensitivity[h:dx+h ,h:dy+h,h:dz+h] = self.target_belief - self.from_state_belief
 
 		# self.sensitivity[:,:,:] = 0
 		self.sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))		
