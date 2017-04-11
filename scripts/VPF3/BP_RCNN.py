@@ -475,6 +475,8 @@ class BPRCNN():
 			print("Saving the Model.")
 			self.save_model()
 
+			print("ACTION COUNTER:", self.action_counter)
+
 	def save_model(self):
 		npy.save("Learnt_Transition.npy",self.trans)
 
