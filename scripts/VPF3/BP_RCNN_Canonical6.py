@@ -265,7 +265,9 @@ class BPRCNN():
 		alpha = self.learning_rate - self.annealing_rate*self.time_count
 
 		# Calculate basic gradient update. 
-		grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity,'valid')		
+		# grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity,'valid')
+		flip_from = npy.flip(npy.flip(npy.flip(self.from_state_ext,axis=0),axis=1),axis=2)
+		grad_update = -2*signal.convolve(flip_from,self.sensitivity,'valid')		
 
 		t0 = npy.zeros((self.trans_space,self.trans_space,self.trans_space))
 		t1 = npy.ones((self.trans_space,self.trans_space,self.trans_space))
@@ -275,7 +277,7 @@ class BPRCNN():
 			self.trans[k] = npy.maximum(t0,npy.minimum(t1,self.trans[k]-alpha*act_grad_update))
 
 			# Is this needed? 
-			# self.trans[k] /= self.trans[k].sum()
+			self.trans[k] /= self.trans[k].sum()
 
 	def recurrence(self):
 		# With Teacher Forcing: Setting next belief to the previous target / ground truth.
