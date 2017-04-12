@@ -78,10 +78,10 @@ class TrajManager(object):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.plot(traj_commanded[0], traj_commanded[1], traj_commanded[2], 
-      label=self.traj_func.func_name + '_commanded', color='blue', linestyle='dashed')
+      label=self.traj_func.__name__ + '_commanded', color='blue', linestyle='dashed')
     if traj_actual:
       ax.plot(traj_actual[0], traj_actual[1], traj_actual[2], 
-        label=self.traj_func.func_name + '_actual', color='red')
+        label=self.traj_func.__name__ + '_actual', color='red')
     ax.legend()
     fig.savefig(self.path_to_data+self.fname+'.png')
     if self.display_plot:
