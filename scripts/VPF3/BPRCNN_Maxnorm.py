@@ -114,24 +114,22 @@ class BPRCNN():
 		self.time_count = 0
 		self.lamda = 1
 		self.learning_rate = 0.5
-		self.annealing_rate = 0.
+		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 1
+		self.epochs = 5
 
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		# self.orig_traj = traj[0:len(traj):50,:]
-		# self.orig_vel = actions[0:len(traj):50,:]
-		self.orig_traj = traj[0:len(traj):30,:]
-		self.orig_vel = actions[0:len(actions):10,:]
+		self.orig_traj = traj[0:len(traj):50,:]
+		self.orig_vel = actions[0:len(traj):50,:]
 
-		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
-		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
+		self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		self.orig_traj = traj
-		self.orig_vel = actions
+		# self.orig_traj = traj
+		# self.orig_vel = actions
 
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
@@ -256,7 +254,7 @@ class BPRCNN():
 		self.sensitivity[h+obs[0]-1:h+obs[0]+3,h+obs[1]-1:h+obs[1]+3,h+obs[2]-1:h+obs[2]+3] = npy.multiply(intermediate_sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 		self.sensitivity = self.sensitivity[h:dx+h,h:dy+h,h:dz+h]
 
-	def backprop_convolution(self):
+	def backprop_convolution(self, num_epochs):
 
 		# self.compute_sensitivities()
 		self.compute_sensitivity()
@@ -264,7 +262,7 @@ class BPRCNN():
 		
 		# Set learning rate and lambda value.		
 		self.time_count +=1
-		alpha = self.learning_rate - self.annealing_rate*self.time_count
+		alpha = self.learning_rate - self.annealing_rate*num_epochs
 
 		# Calculate basic gradient update. 
 		# grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity,'valid')
@@ -406,9 +404,10 @@ class BPRCNN():
 		self.orig_traj /= norm_vector
 
 		# Normalize actions (velocities).
-		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
-		# self.orig_vel /= vel_norm_vector
 		self.orig_vel /= norm_vector
+		# vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		max_vel_norm = npy.max(npy.linalg.norm(self.orig_vel,axis=0))
+		self.orig_vel /= vel_norm_vector
 
 		# for t in range(len(self.traj)):
 		for t in range(len(self.orig_traj)):
@@ -423,7 +422,8 @@ class BPRCNN():
 
 			# Action. 
 
-			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+			# vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+			vel = self.orig_vel[t]
 			# print("Vel",vel)
 			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
 			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
@@ -518,7 +518,7 @@ class BPRCNN():
 		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.005)
 		self.obs_model /= self.obs_model.sum()
 
-	def train_timepoint(self, timepoint):
+	def train_timepoint(self, timepoint, num_epochs):
 
 		# Parse Data:
 			# Set target belief, beta, etc...
@@ -535,7 +535,7 @@ class BPRCNN():
 		self.belief_correction()
 
 		# Backpropagate with ground truth belief.
-		self.backprop_convolution()
+		self.backprop_convolution(num_epochs)
 
 		# Recurrence. 
 		self.recurrence()
@@ -552,8 +552,8 @@ class BPRCNN():
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-1):
 			# for j in range(1):				
-				print("Training Time Step:",j)
-				self.train_timepoint(j)
+				print("Training Epoch: {0} Time Step: {1}".format(i,j))
+				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
 			self.save_model()
@@ -569,13 +569,10 @@ def main(args):
 	bprcnn = BPRCNN()
 
 	# Load the CSV file, ignore first line.
-	# traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
+	traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
 	
-	traj = npy.load(str(sys.argv[1]))
-	actions = npy.load(str(sys.argv[2]))
 	# Pick up trajectories and linear velocities as actions.
-	# bprcnn.load_trajectory(traj_csv[10000:,:3], traj_csv[10000:,7:10])
-	bprcnn.load_trajectory(traj,actions)
+	bprcnn.load_trajectory(traj_csv[10000:,:3], traj_csv[10000:,7:10])
 	bprcnn.train_BPRCNN()
 
 if __name__ == '__main__':
