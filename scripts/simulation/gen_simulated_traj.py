@@ -5,16 +5,18 @@ import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy import linalg as LA
 from IPython import embed
 from mpl_toolkits.mplot3d import Axes3D
 
 # Hyperparameters
-N = 1000
+N = 5000
 mu_error = 0.0
 sigma_error = 0.005
 ALPHA = 0.5
 BETA = 0.001
 SIGMA = 0.005
+GAMMA = 0.1
 
 def gaussian_error():
   """
@@ -33,23 +35,71 @@ def gaussian_sine_error():
   eps = np.random.normal(eps_mu, eps_sigma, N)
   return eps
 
+def gaussian_sine_error_vel(v):
+  """
+  error model:  Epsilon ~ Normal(BETA * sin(ALPHA*t),GAMMA * v)
+  """
+  t = np.array(range(0,N))
+  eps_mu = GAMMA * BETA * np.sin(ALPHA * t)
+  eps_sigma = GAMMA * v
+  eps = np.random.normal(eps_mu, eps_sigma, N)
+  return eps
+
 def add_noise_1(traj_commanded, traj_actual):
   """
   Add noise to state x_t directly
   """
-  for i in range(len(traj_actual)):
+  K = len(traj_actual)
+  velocity_commanded = np.zeros([K,N-1])
+  velocity_actual = np.zeros([K,N-1])
+
+  for i in range(K):
     traj_actual[i] += gaussian_error()
+    for j in range(1,N):
+      velocity_commanded[i][j-1] = traj_commanded[i][j] - traj_commanded[i][j-1]
+      velocity_actual[i][j-1] = traj_actual[i][j] - traj_actual[i][j-1]
+  return velocity_commanded, velocity_actual
 
 def add_noise_2(traj_commanded, traj_actual):
   """
   Add (Gaussian sine) noise to velocity velocity v_t.
   """
-  # Recurrance (prime means actual traj with error):
-  # x_{t+1}^prime = x_{t}^prime + x_{t+1} - x_{t} + eps
-  for i in range(len(traj_actual)):
+  K = len(traj_actual)
+  velocity_commanded = np.zeros([K,N-1])
+  velocity_actual = np.zeros([K,N-1])
+ 
+  for i in range(K):
     eps = gaussian_sine_error()
     for j in range(1,N):
+      # Recurrance (prime below means actual traj with error):
+      # x_{t+1}^prime = x_{t}^prime + x_{t+1} - x_{t} + eps
       traj_actual[i][j] = traj_actual[i][j-1] + traj_commanded[i][j] - traj_commanded[i][j-1] + eps[j]
+      velocity_commanded[i][j-1] = traj_commanded[i][j] - traj_commanded[i][j-1]
+      velocity_actual[i][j-1] = traj_actual[i][j] - traj_actual[i][j-1]
+  return velocity_commanded, velocity_actual
+
+def add_noise_3(traj_commanded, traj_actual):
+  """
+  Std Dev in Noise Model proportional to the commanded velocity
+  """
+  K = len(traj_actual)
+  velocity_commanded = np.zeros([K,N])
+  velocity_actual = np.zeros([K,N])
+
+  #Compute velocity_commanded
+  for j in range(1,N):
+    for i in range(K):
+      velocity_commanded[i][j-1] = traj_commanded[i][j] - traj_commanded[i][j-1]
+  v = LA.norm(velocity_commanded, axis=0) #Normalized velocity magnitude
+
+  for i in range(K):
+    eps = gaussian_sine_error_vel(v)
+    for j in range(1,N):
+      # Recurrance (prime below means actual traj with error):
+      # x_{t+1}^prime = x_{t}^prime + x_{t+1} - x_{t} + eps
+      traj_actual[i][j] = traj_actual[i][j-1] + traj_commanded[i][j] - traj_commanded[i][j-1] + eps[j]
+      velocity_actual[i][j] = traj_actual[i][j] - traj_actual[i][j-1]
+  return velocity_commanded, velocity_actual
 
 class TrajManager(object):
   def __init__(self, fname, traj_func, 
@@ -63,18 +113,27 @@ class TrajManager(object):
     x,y,z = self.gen_traj()
     traj_commanded = [x,y,z]
     traj_actual = copy.deepcopy(traj_commanded)
-    add_noise_2(traj_commanded, traj_actual)
-    self.plot_traj(traj_commanded, traj_actual=traj_actual)
-    self.save_traj(traj_commanded, traj_actual)
+    velocity_commanded, velocity_actual = add_noise_3(traj_commanded, traj_actual)
 
-  def save_traj(self, traj_commanded, traj_actual):
-    traj = {'commanded':traj_commanded, 'actual':traj_actual}
+    traj = {}
+    traj['traj_commanded'] = traj_commanded
+    traj['traj_actual'] = traj_actual
+    traj['velocity_commanded'] = velocity_commanded
+    traj['velocity_actual'] = velocity_actual
+    traj['speed_commanded'] = LA.norm(velocity_commanded, axis=0)
+    traj['speed_actual'] = LA.norm(velocity_actual, axis=0)
+    self.plot_traj(traj)
+    self.save_traj(traj)
+
+  def save_traj(self, traj):
     pickle.dump(traj, open(self.path_to_data + self.fname + '.p','wb'))
 
   def gen_traj(self):
     return self.traj_func()
 
-  def plot_traj(self, traj_commanded, traj_actual=None):
+  def plot_traj(self, traj):
+    traj_commanded = traj["traj_commanded"]
+    traj_actual = traj["traj_actual"]
     fig = plt.figure()
     ax = fig.gca(projection='3d')
     ax.plot(traj_commanded[0], traj_commanded[1], traj_commanded[2], 
@@ -152,7 +211,7 @@ if __name__ == "__main__":
   if not os.path.exists(args.path_to_data):
     os.makedirs(args.path_to_data)
   list_funcs = [simple_helix, simple_ellipse, quadratic_helix, cubic_helix, lissajous_1, lissajous_2]
-  # list_funcs = [simple_ellipse,]
+  # list_funcs = [simple_helix,]
   for fname, traj_func in enumerate(list_funcs):
     traj_manager = TrajManager(fname=str(fname), traj_func=traj_func, 
       path_to_data=args.path_to_data, display_plot=args.display_plot)
