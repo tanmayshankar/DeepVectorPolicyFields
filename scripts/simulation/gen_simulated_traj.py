@@ -12,11 +12,15 @@ from mpl_toolkits.mplot3d import Axes3D
 # Hyperparameters
 N = 5000
 mu_error = 0.0
-sigma_error = 0.005
+# sigma_error = 0.005
+sigma_error = 0.1
+# ALPHA = 0.5
 ALPHA = 0.5
 BETA = 0.001
-SIGMA = 0.005
-GAMMA = 0.1
+# SIGMA = 0.005
+SIGMA = 0.1
+# GAMMA = 0.1
+GAMMA = 0.3
 
 def gaussian_error():
   """
