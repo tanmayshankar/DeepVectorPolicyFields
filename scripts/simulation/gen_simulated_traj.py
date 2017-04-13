@@ -5,16 +5,18 @@ import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from numpy import linalg as LA
 from IPython import embed
 from mpl_toolkits.mplot3d import Axes3D
 
 # Hyperparameters
-N = 1000
+N = 5000
 mu_error = 0.0
 sigma_error = 0.005
 ALPHA = 0.5
 BETA = 0.001
 SIGMA = 0.005
+GAMMA = 0.1
 
 def gaussian_error():
   """
@@ -30,6 +32,16 @@ def gaussian_sine_error():
   t = np.array(range(0,N))
   eps_mu = BETA * np.sin(ALPHA * t)
   eps_sigma = np.tile(SIGMA, N)
+  eps = np.random.normal(eps_mu, eps_sigma, N)
+  return eps
+
+def gaussian_sine_error_vel(v):
+  """
+  error model:  Epsilon ~ Normal(BETA * sin(ALPHA*t),GAMMA * v)
+  """
+  t = np.array(range(0,N))
+  eps_mu = GAMMA * BETA * np.sin(ALPHA * t)
+  eps_sigma = GAMMA * v
   eps = np.random.normal(eps_mu, eps_sigma, N)
   return eps
 
@@ -66,6 +78,29 @@ def add_noise_2(traj_commanded, traj_actual):
       velocity_actual[i][j-1] = traj_actual[i][j] - traj_actual[i][j-1]
   return velocity_commanded, velocity_actual
 
+def add_noise_3(traj_commanded, traj_actual):
+  """
+  Std Dev in Noise Model proportional to the commanded velocity
+  """
+  K = len(traj_actual)
+  velocity_commanded = np.zeros([K,N])
+  velocity_actual = np.zeros([K,N])
+
+  #Compute velocity_commanded
+  for j in range(1,N):
+    for i in range(K):
+      velocity_commanded[i][j-1] = traj_commanded[i][j] - traj_commanded[i][j-1]
+  v = LA.norm(velocity_commanded, axis=0) #Normalized velocity magnitude
+
+  for i in range(K):
+    eps = gaussian_sine_error_vel(v)
+    for j in range(1,N):
+      # Recurrance (prime below means actual traj with error):
+      # x_{t+1}^prime = x_{t}^prime + x_{t+1} - x_{t} + eps
+      traj_actual[i][j] = traj_actual[i][j-1] + traj_commanded[i][j] - traj_commanded[i][j-1] + eps[j]
+      velocity_actual[i][j] = traj_actual[i][j] - traj_actual[i][j-1]
+  return velocity_commanded, velocity_actual
+
 class TrajManager(object):
   def __init__(self, fname, traj_func, 
     path_to_data, display_plot=False):
@@ -78,14 +113,15 @@ class TrajManager(object):
     x,y,z = self.gen_traj()
     traj_commanded = [x,y,z]
     traj_actual = copy.deepcopy(traj_commanded)
-    velocity_commanded, velocity_actual = add_noise_2(traj_commanded, traj_actual)
+    velocity_commanded, velocity_actual = add_noise_3(traj_commanded, traj_actual)
 
     traj = {}
     traj['traj_commanded'] = traj_commanded
     traj['traj_actual'] = traj_actual
     traj['velocity_commanded'] = velocity_commanded
     traj['velocity_actual'] = velocity_actual
-
+    traj['speed_commanded'] = LA.norm(velocity_commanded, axis=0)
+    traj['speed_actual'] = LA.norm(velocity_actual, axis=0)
     self.plot_traj(traj)
     self.save_traj(traj)
 
