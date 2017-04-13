@@ -11,10 +11,10 @@ class BPRCNN():
 		self.discrete_x = 50
 		self.discrete_y = 50
 		self.discrete_z = 10
+		self.discrete_yaw = 36
 
 		self.dimensions = 3
 		self.action_size = 6
-		# self.action_size = 27
 
 		# Setting discretization variables
 		self.action_lower = -1
@@ -25,7 +25,7 @@ class BPRCNN():
 		self.traj_lower = npy.array([-1,-1,0])
 		self.traj_upper = +1
 		# self.traj_cell = 0.1
-		# self.traj_cell = (self.traj_upper-self.traj_lower)/self.
+		# self.traj_cell = (	self.traj_upper-self.traj_lower)/self.
 
 		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
 		# self.grid_cell_size[2] = 1./self.discrete_z
@@ -33,34 +33,6 @@ class BPRCNN():
 		# SHIFTING BACK TO CANONICAL ACTIONS
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
-		# self.action_space = npy.array([ [-1., -1., -1.],
-		# 								[ 0., -1., -1.],
-		# 								[ 1., -1., -1.],
-		# 								[-1.,  0., -1.],
-		# 								[ 0.,  0., -1.],
-		# 								[ 1.,  0., -1.],
-		# 								[-1.,  1., -1.],
-		# 								[ 0.,  1., -1.],
-		# 								[ 1.,  1., -1.],
-		# 								[-1., -1.,  0.],
-		# 								[ 0., -1.,  0.],
-		# 								[ 1., -1.,  0.],
-		# 								[-1.,  0.,  0.],
-		# 								[ 0.,  0.,  0.],
-		# 								[ 1.,  0.,  0.],
-		# 								[-1.,  1.,  0.],
-		# 								[ 0.,  1.,  0.],
-		# 								[ 1.,  1.,  0.],
-		# 								[-1., -1.,  1.],
-		# 								[ 0., -1.,  1.],
-		# 								[ 1., -1.,  1.],
-		# 								[-1.,  0.,  1.],
-		# 								[ 0.,  0.,  1.],
-		# 								[ 1.,  0.,  1.],
-		# 								[-1.,  1.,  1.],
-		# 								[ 0.,  1.,  1.],
-		# 								[ 1.,  1.,  1.]])
-
 
 		# Defining transition model.
 		self.trans_space = 3
@@ -114,10 +86,10 @@ class BPRCNN():
 		self.time_count = 0
 		self.lamda = 1
 		self.learning_rate = 0.5
-		self.annealing_rate = 0.
+		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 1
+		self.epochs = 5
 
 	def load_trajectory(self, traj, actions):
 
@@ -215,27 +187,6 @@ class BPRCNN():
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
 
-	# def compute_sensitivities(self):
-
-	# 	# Compute the sensitivity values. 
-	# 	self.sensitivity = self.target_belief - self.from_state_belief
-
-	# 	obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
-
-	# 	# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
-	# 	h = self.h
-	# 	dx = self.discrete_x
-	# 	dy = self.discrete_y
-	# 	dz = self.discrete_z
-
-	# 	# Redefining the sensitivity values to be (target_b - pred_b)*obs_model = F.
-	# 	# self.sensitivity = npy.multiply(self.sensitivity[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)
-
-	# 	# UPDATING TO THE GAUSSIAN KERNEL OBSERVATION MODEL AGAIN:
-	# 	intermediate_sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))
-	# 	intermediate_sensitivity[h:dx+h,h:dy+h,h:dz+h] = self.sensitivity.copy()		
-	# 	self.sensitivity = npy.multiply(intermediate_sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)		
-
 	def compute_sensitivity(self):
 
 		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
@@ -254,7 +205,7 @@ class BPRCNN():
 		self.sensitivity[h+obs[0]-1:h+obs[0]+3,h+obs[1]-1:h+obs[1]+3,h+obs[2]-1:h+obs[2]+3] = npy.multiply(intermediate_sensitivity[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 		self.sensitivity = self.sensitivity[h:dx+h,h:dy+h,h:dz+h]
 
-	def backprop_convolution(self):
+	def backprop_convolution(self, num_epochs):
 
 		# self.compute_sensitivities()
 		self.compute_sensitivity()
@@ -262,7 +213,7 @@ class BPRCNN():
 		
 		# Set learning rate and lambda value.		
 		self.time_count +=1
-		alpha = self.learning_rate - self.annealing_rate*self.time_count
+		alpha = self.learning_rate - self.annealing_rate*num_epochs
 
 		# Calculate basic gradient update. 
 		# grad_update = -2*signal.convolve(self.from_state_ext,self.sensitivity,'valid')
@@ -329,49 +280,6 @@ class BPRCNN():
 			bases.append((volume, index_to_add))			
 
 		return bases
-
-
-# CONSTANT GRID SIZE ALONG ALL DIMENSIONS:
-	# def interpolate_coefficients(self, point, traj_or_action=1):
-	# # def interpolate_coefficients(self, point):
-
-	# 	# Choose whether we are interpolating a trajectory or an action data point.
-
-	# 	# Now lower is just uniformly -1. 
-	# 	lower = -npy.ones(3)
-
-	# 	# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
-	# 	# If trajectory, z lower must be 0.
-	# 	lower[2] += traj_or_action
-
-	# 	grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
-		
-
-	# 	base_indices = npy.floor((point-lower)/grid_cell_size)
-	# 	base_point = grid_cell_size*npy.floor(point/grid_cell_size)		
-	# 	base_lengths = point - base_point
-	# 	bases = []
-
-	# 	for index_set in self._powerset(range(self.dimensions)):
-	# 		index_set = set(index_set)
-	# 		volume = 1 
-	# 		# point_to_add = base_point.copy()
-	# 		index_to_add = base_indices.copy()
-
-	# 		for i in range(self.dimensions):
-	# 			if i in index_set:
-	# 				side_length = base_lengths[i]			
-	# 				# point_to_add += self.grid_cell_size
-	# 				index_to_add[i] += 1
-	# 			else:
-	# 				side_length = grid_cell_size - base_lengths[i]
-
-	# 			volume *= side_length / grid_cell_size
-
-	# 		# bases.append((volume, point_to_add, index_to_add))			
-	# 		bases.append((volume, index_to_add))			
-
-	# 	return bases
 
 	def map_triplet_to_action(self, triplet):
 
@@ -448,45 +356,6 @@ class BPRCNN():
 		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
 		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
 
-	# def preprocess_trajectory(self):
-
-	# 	print("Preprocessing the Data.")
-
-	# 	# Normalize trajectory.
-	# 	norm_vector = [2.5,2.5,1.]
-	# 	# norm_vector = [3.,3.,3.]
-	# 	self.orig_traj /= norm_vector
-
-	# 	# Normalize actions (velocities).
-	# 	vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
-	# 	# self.orig_vel /= vel_norm_vector
-	# 	self.orig_vel /= norm_vector
-
-	# 	# for t in range(len(self.traj)):
-	# 	for t in range(len(self.orig_traj)):
-			
-	# 		# Trajectory. 
-	# 		split = self.interpolate_coefficients(self.orig_traj[t],1)
-	# 		count = 0
-	# 		for percent, indices in split: 
-	# 			self.interp_traj[t,count] = indices
-	# 			self.interp_traj_percent[t,count] = percent
-	# 			count += 1
-
-	# 		# Action. 
-	# 		# split = self.interpolate_coefficients(self.actions[t]/npy.linalg.norm(self.actions[t]),0)
-	# 		split = self.interpolate_coefficients(self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t]),0)
-	# 		count = 0
-	# 		for percent, indices in split:
-	# 			self.interp_vel[t,count] = indices
-	# 			self.interp_vel_percent[t,count] = percent
-	# 			count += 1
-
-	# 	npy.save("Interp_Traj.npy",self.interp_traj)
-	# 	npy.save("Interp_Vel.npy",self.interp_vel)
-	# 	npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
-	# 	npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
-
 	def parse_data(self, timepoint):
 		# Preprocess data? 
 
@@ -516,7 +385,7 @@ class BPRCNN():
 		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.005)
 		self.obs_model /= self.obs_model.sum()
 
-	def train_timepoint(self, timepoint):
+	def train_timepoint(self, timepoint, num_epochs):
 
 		# Parse Data:
 			# Set target belief, beta, etc...
@@ -533,7 +402,7 @@ class BPRCNN():
 		self.belief_correction()
 
 		# Backpropagate with ground truth belief.
-		self.backprop_convolution()
+		self.backprop_convolution(num_epochs)
 
 		# Recurrence. 
 		self.recurrence()
@@ -550,8 +419,8 @@ class BPRCNN():
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-1):
 			# for j in range(1):				
-				print("Training Time Step:",j)
-				self.train_timepoint(j)
+				print("Training Epoch: {0} Time Step: {1}".format(i,j))
+				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
 			self.save_model()
