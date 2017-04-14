@@ -85,11 +85,11 @@ class BPRCNN():
 		# Setting hyperparameters
 		self.time_count = 0
 		self.lamda = 1
-		self.learning_rate = 0.5
+		self.learning_rate = 0.3
 		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 5
+		self.epochs = 3
 
 	def load_trajectory(self, traj, actions):
 
@@ -108,10 +108,19 @@ class BPRCNN():
 
 		self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
+
+		# AUGMENTING THE DATA:
+		print(self.orig_traj)
+		# self.orig_traj[:,2] = 3.-0.11-self.orig_traj[:,2]
+		self.orig_traj[:,2] = 2.6-self.orig_traj[:,2]
+		self.orig_vel[:,2] = -self.orig_vel[:,2]
 		
 		# self.preprocess_trajectory()
 		self.preprocess_canonical()
 		self.initialize_pointset()
+
+	def load_transition(self, trans):
+		self.trans = trans
 
 	def initialize_pointset(self):
 
@@ -307,8 +316,8 @@ class BPRCNN():
 		print("Preprocessing the Data.")
 
 		# Normalize trajectory.
-		norm_vector = [2.5,2.5,1.]
-		# norm_vector = npy.array([1.1,1.1,3.])
+		# norm_vector = [2.5,2.5,1.]
+		norm_vector = npy.array([1.1,1.1,3.])
 		# norm_vector = [3.,3.,3.]
 		self.orig_traj /= norm_vector
 
@@ -405,7 +414,7 @@ class BPRCNN():
 		# Backpropagate with ground truth belief.
 		self.backprop_convolution(num_epochs)
 
-		# Recurrence. 
+		# Recurrence
 		self.recurrence()
 
 	def train_BPRCNN(self, file):
@@ -420,7 +429,7 @@ class BPRCNN():
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-1):
 			# for j in range(1):				
-				print("REALTRAJ: {2}: Training epoch: {0} Time Step: {1}".format(i,j,file))
+				print("G1:{2}: Training epoch: {0} Time Step: {1}".format(i,j,file))
 				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
@@ -436,23 +445,20 @@ def main(args):
 
 	bprcnn = BPRCNN()
 
-	# Load the CSV file, ignore first line.
-	# traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
-	
-	# traj = npy.load(str(sys.argv[1]))
-	# actions = npy.load(str(sys.argv[2]))
-
-	# Pick up trajectories and linear velocities as actions.
-	# bprcnn.load_trajectory(traj_csv[10000:,:3], traj_csv[10000:,7:10])
+	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/simulation/sim-data-gamma-5/"
 
 	i = int(sys.argv[1])
-	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/Data/trajectories/T{0}".format(i)
 
-	traj = npy.load(os.path.join(FILE_DIR,"Downsamp_Actual_Traj.npy"))
-	actions = npy.load(os.path.join(FILE_DIR,"Commanded_Vel.npy"))
+	FILE_DIR_2 = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/VPF3/Gamma5/Sim_Traj_{0}/".format(i)
+
+	traj = npy.transpose(npy.load(os.path.join(FILE_DIR,"Trajectory_{0}.npy".format(i))))
+	actions = npy.transpose(npy.load(os.path.join(FILE_DIR,"Desired_Velocity_{0}.npy".format(i))))
+	trans = npy.load(os.path.join(FILE_DIR_2,"Learnt_Transition.npy"))
 
 	bprcnn.load_trajectory(traj,actions)
+	bprcnn.load_transition(trans)
 	bprcnn.train_BPRCNN(i)
 
 if __name__ == '__main__':
 	main(sys.argv)
+

@@ -94,14 +94,14 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		self.orig_traj = traj[0:len(traj):50,:]
-		self.orig_vel = actions[0:len(traj):50,:]
+		# self.orig_traj = traj[0:len(traj):50,:]
+		# self.orig_vel = actions[0:len(traj):50,:]
 
-		self.orig_vel = npy.diff(self.orig_traj,axis=0)
-		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
+		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		# self.orig_traj = traj
-		# self.orig_vel = actions
+		self.orig_traj = traj
+		self.orig_vel = actions
 
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
@@ -307,7 +307,8 @@ class BPRCNN():
 		print("Preprocessing the Data.")
 
 		# Normalize trajectory.
-		norm_vector = [2.5,2.5,1.]
+		# norm_vector = [2.5,2.5,1.]
+		norm_vector = npy.array([1.1,1.1,3.])
 		# norm_vector = [3.,3.,3.]
 		self.orig_traj /= norm_vector
 
@@ -419,7 +420,7 @@ class BPRCNN():
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-1):
 			# for j in range(1):				
-				print("Training Epoch: {0} Time Step: {1}".format(i,j))
+				print("Training epoch: {0} Time Step: {1}".format(i,j))
 				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
@@ -435,7 +436,7 @@ def main(args):
 
 	bprcnn = BPRCNN()
 
-	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/simulation/sim-data"
+	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/simulation/sim-data-gamma-5/"
 
 	i = int(sys.argv[1])
 
