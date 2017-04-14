@@ -13,6 +13,8 @@ class BPRCNN():
 		self.discrete_z = 10
 		self.discrete_yaw = 36
 
+		self.grid_shape = (self.discrete_x, self.discrete_y, self.discrete_z)
+
 		self.dimensions = 3
 		self.action_size = 6
 
@@ -27,7 +29,7 @@ class BPRCNN():
 		# self.traj_cell = 0.1
 		# self.traj_cell = (	self.traj_upper-self.traj_lower)/self.
 
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float) / self.grid_shape
 		# self.grid_cell_size[2] = 1./self.discrete_z
 
 		# SHIFTING BACK TO CANONICAL ACTIONS
@@ -43,24 +45,25 @@ class BPRCNN():
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 
-		self.action_counter = npy.zeros(self.action_size)
+    # Add one for the NOOP action. Currently, only used here and in beta.
+		self.action_counter = npy.zeros(self.action_size + 1)
 		# Defining observation model.
 		self.obs_space = 5
 		
 		# Defining Value function, policy, etc. 	
-		self.value_function = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
-		self.policy = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
+		self.value_function = npy.zeros(self.grid_shape)
+		self.policy = npy.zeros(self.grid_shape)
 
 		# Discount
 		self.gamma = 0.95
 
 		# Defining belief variables.
-		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.from_state_belief = npy.zeros(self.grid_shape)
+		self.to_state_belief = npy.zeros(self.grid_shape)
+		self.target_belief = npy.zeros(self.grid_shape)
 		# self.corrected_to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.intermed_belief = npy.zeros(self.grid_shape)
+		self.sensitivity = npy.zeros(self.grid_shape)
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
@@ -71,7 +74,8 @@ class BPRCNN():
 		self.orig_traj = []
 		self.orig_vel = []
 
-		self.beta = npy.zeros(self.action_size)
+    # Add one for the NOOP action. Currently, only used here and in action_counter.
+		self.beta = npy.zeros(self.action_size + 1)
 
 		# Defining observation model related variables. 
 		self.obs_space = 4
@@ -89,7 +93,7 @@ class BPRCNN():
 		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 5
+		self.epochs = 1
 
 	def load_trajectory(self, traj, actions):
 
@@ -112,6 +116,13 @@ class BPRCNN():
 		# self.preprocess_trajectory()
 		self.preprocess_canonical()
 		self.initialize_pointset()
+
+		valid_ind_f = lambda max_ind: lambda ind: 0 <= ind < max_ind
+		fs = map(valid_ind_f, self.grid_shape)
+		ind_sat = [fs[i](f(self.interp_traj[:, :, i])) for i in range(3) for f in [npy.max, npy.min]]
+		if not all(ind_sat):
+			print(ind_sat)
+			raise Exception("Trajectory out of bounds!")
 
 	def initialize_pointset(self):
 
@@ -303,6 +314,8 @@ class BPRCNN():
 		if triplet[2]==1:
 			return 5
 
+		return 6
+
 	def preprocess_canonical(self):
 		print("Preprocessing the Data.")
 
@@ -331,10 +344,13 @@ class BPRCNN():
 			# Action. 
 
 			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+			if npy.isnan(vel).any():
+				self.interp_vel[t] = npy.zeros(3)
+			else:
+				self.interp_vel[t,0] = [npy.sign(vel[0]),0,0]
+				self.interp_vel[t,1] = [0,npy.sign(vel[1]),0]
+				self.interp_vel[t,2] = [0,0,npy.sign(vel[2])]
 			# print("Vel",vel)
-			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
-			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
-			self.interp_vel[t,2] = [0,0,abs(vel[2])/vel[2]]
 
 			# print(self.interp_vel[t])
 
@@ -436,12 +452,15 @@ def main(args):
 
 	bprcnn = BPRCNN()
 
-	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/simulation/sim-data-gamma-5/"
+	FILE_DIR = "/home/alex/classes/deep_rl/DeepVectorPolicyFields/scripts/simulation/sim-data/"
 
 	i = int(sys.argv[1])
 
-	traj = npy.transpose(npy.load(os.path.join(FILE_DIR,"Trajectory_{0}.npy".format(i))))
-	actions = npy.transpose(npy.load(os.path.join(FILE_DIR,"Desired_Velocity_{0}.npy".format(i))))
+	import pickle
+	sim_data = pickle.load(open(os.path.join(FILE_DIR, '%d.p' % i)))
+
+	traj = npy.transpose(sim_data['traj_actual'])
+	actions = npy.transpose(sim_data['velocity_commanded'])
 
 	bprcnn.load_trajectory(traj,actions)
 	bprcnn.train_BPRCNN()
