@@ -5,12 +5,17 @@ from headers import *
 class BPRCNN():
 
 	def __init__(self):
-
+		
 		# Defining common variables.
 		self.discrete = 50
 		self.discrete_x = 50
 		self.discrete_y = 50
 		self.discrete_z = 10
+
+		self.discrete_x = 51
+		self.discrete_y = 51
+		self.discrete_z = 11
+
 		self.discrete_yaw = 36
 
 		self.dimensions = 3
@@ -27,7 +32,7 @@ class BPRCNN():
 		# self.traj_cell = 0.1
 		# self.traj_cell = (	self.traj_upper-self.traj_lower)/self.
 
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1]		
 		# self.grid_cell_size[2] = 1./self.discrete_z
 
 		# SHIFTING BACK TO CANONICAL ACTIONS
@@ -94,14 +99,14 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		# self.orig_traj = traj[0:len(traj):50,:]
-		# self.orig_vel = actions[0:len(traj):50,:]
+		self.orig_traj = traj[0:len(traj):5,:]
+		self.orig_vel = actions[0:len(traj):5,:]
 
 		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
 		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		self.orig_traj = traj
-		self.orig_vel = actions
+		# self.orig_traj = traj
+		# self.orig_vel = actions
 
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
@@ -313,9 +318,9 @@ class BPRCNN():
 		self.orig_traj /= norm_vector
 
 		# Normalize actions (velocities).
-		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
-		# self.orig_vel /= vel_norm_vector
 		self.orig_vel /= norm_vector
+		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		self.orig_vel /= vel_norm_vector
 
 		# for t in range(len(self.traj)):
 		for t in range(len(self.orig_traj)):
