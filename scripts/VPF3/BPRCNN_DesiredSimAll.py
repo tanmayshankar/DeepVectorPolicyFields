@@ -13,6 +13,8 @@ class BPRCNN():
 		self.discrete_z = 10
 		self.discrete_yaw = 36
 
+		self.grid_shape = (self.discrete_x, self.discrete_y, self.discrete_z)
+
 		self.dimensions = 3
 		self.action_size = 6
 
@@ -27,7 +29,7 @@ class BPRCNN():
 		# self.traj_cell = 0.1
 		# self.traj_cell = (	self.traj_upper-self.traj_lower)/self.
 
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float) / self.grid_shape
 		# self.grid_cell_size[2] = 1./self.discrete_z
 
 		# SHIFTING BACK TO CANONICAL ACTIONS
@@ -49,19 +51,19 @@ class BPRCNN():
 		self.obs_space = 5
 		
 		# Defining Value function, policy, etc. 	
-		self.value_function = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
-		self.policy = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
+		self.value_function = npy.zeros(self.grid_shape)
+		self.policy = npy.zeros(self.grid_shape)
 
 		# Discount
 		self.gamma = 0.95
 
 		# Defining belief variables.
-		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.from_state_belief = npy.zeros(self.grid_shape)
+		self.to_state_belief = npy.zeros(self.grid_shape)
+		self.target_belief = npy.zeros(self.grid_shape)
 		# self.corrected_to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+		self.intermed_belief = npy.zeros(self.grid_shape)
+		self.sensitivity = npy.zeros(self.grid_shape)
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
@@ -114,6 +116,13 @@ class BPRCNN():
 		# self.preprocess_trajectory()
 		self.preprocess_canonical()
 		self.initialize_pointset()
+
+		valid_ind_f = lambda max_ind: lambda ind: 0 <= ind < max_ind
+		fs = map(valid_ind_f, self.grid_shape)
+		ind_sat = [fs[i](f(self.interp_traj[:, :, i])) for i in range(3) for f in [npy.max, npy.min]]
+		if not all(ind_sat):
+			print(ind_sat)
+			raise Exception("Trajectory out of bounds!")
 
 	def initialize_pointset(self):
 
