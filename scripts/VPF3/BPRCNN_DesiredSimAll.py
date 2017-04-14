@@ -43,7 +43,8 @@ class BPRCNN():
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 
-		self.action_counter = npy.zeros(self.action_size)
+    # Add one for the NOOP action. Currently, only used here and in beta.
+		self.action_counter = npy.zeros(self.action_size + 1)
 		# Defining observation model.
 		self.obs_space = 5
 		
@@ -71,7 +72,8 @@ class BPRCNN():
 		self.orig_traj = []
 		self.orig_vel = []
 
-		self.beta = npy.zeros(self.action_size)
+    # Add one for the NOOP action. Currently, only used here and in action_counter.
+		self.beta = npy.zeros(self.action_size + 1)
 
 		# Defining observation model related variables. 
 		self.obs_space = 4
@@ -89,7 +91,7 @@ class BPRCNN():
 		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 5
+		self.epochs = 1
 
 	def load_trajectory(self, traj, actions):
 
@@ -303,6 +305,8 @@ class BPRCNN():
 		if triplet[2]==1:
 			return 5
 
+		return 6
+
 	def preprocess_canonical(self):
 		print("Preprocessing the Data.")
 
@@ -331,10 +335,13 @@ class BPRCNN():
 			# Action. 
 
 			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+			if npy.isnan(vel).any():
+				self.interp_vel[t] = npy.zeros(3)
+			else:
+				self.interp_vel[t,0] = [npy.sign(vel[0]),0,0]
+				self.interp_vel[t,1] = [0,npy.sign(vel[1]),0]
+				self.interp_vel[t,2] = [0,0,npy.sign(vel[2])]
 			# print("Vel",vel)
-			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
-			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
-			self.interp_vel[t,2] = [0,0,abs(vel[2])/vel[2]]
 
 			# print(self.interp_vel[t])
 
@@ -436,12 +443,15 @@ def main(args):
 
 	bprcnn = BPRCNN()
 
-	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/scripts/simulation/sim-data-gamma-5/"
+	FILE_DIR = "/home/alex/classes/deep_rl/DeepVectorPolicyFields/scripts/simulation/sim-data/"
 
 	i = int(sys.argv[1])
 
-	traj = npy.transpose(npy.load(os.path.join(FILE_DIR,"Trajectory_{0}.npy".format(i))))
-	actions = npy.transpose(npy.load(os.path.join(FILE_DIR,"Desired_Velocity_{0}.npy".format(i))))
+	import pickle
+	sim_data = pickle.load(open(os.path.join(FILE_DIR, '%d.p' % i)))
+
+	traj = npy.transpose(sim_data['traj_actual'])
+	actions = npy.transpose(sim_data['velocity_commanded'])
 
 	bprcnn.load_trajectory(traj,actions)
 	bprcnn.train_BPRCNN()
