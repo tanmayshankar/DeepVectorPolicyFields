@@ -6,7 +6,6 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy import linalg as LA
-from IPython import embed
 from mpl_toolkits.mplot3d import Axes3D
 
 # Hyperparameters
@@ -20,7 +19,10 @@ BETA = 0.001
 # SIGMA = 0.005
 SIGMA = 0.1
 # GAMMA = 0.1
-GAMMA = 0.3
+GAMMA = 0.1
+
+Z_MIN = 0.1
+Z_MAX = 2.5
 
 def gaussian_error():
   """
@@ -150,9 +152,12 @@ class TrajManager(object):
     if self.display_plot:
       plt.show()
 
+def get_z():
+  return np.concatenate((np.linspace(Z_MIN, Z_MAX, N/2), np.linspace(Z_MAX, Z_MIN, N/2)))
+
 def simple_helix():
   theta = np.linspace(-4 * np.pi, 4 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   r = 0.8
   x = r * np.sin(theta)
   y = r * np.cos(theta)
@@ -160,7 +165,7 @@ def simple_helix():
 
 def simple_ellipse():
   theta = np.linspace(-4 * np.pi, 4 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   a = 0.4
   b = 0.9
   x = a * np.sin(theta)
@@ -169,7 +174,7 @@ def simple_ellipse():
 
 def quadratic_helix():
   theta = np.linspace(-4 * np.pi, 4 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   r = z**2 + 1
   r = r/np.max(r)
   x = r * np.sin(theta)
@@ -178,7 +183,7 @@ def quadratic_helix():
 
 def cubic_helix():
   theta = np.linspace(-4 * np.pi, 4 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   r = 3*z**3
   r = r/np.max(r)
   x = r * np.sin(theta)
@@ -187,7 +192,7 @@ def cubic_helix():
 
 def lissajous_1():
   theta = np.linspace(-1 * np.pi, 1 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   a = 0.4
   b = 0.9
   k_x = 3
@@ -198,7 +203,7 @@ def lissajous_1():
 
 def lissajous_2():
   theta = np.linspace(0, 1 * np.pi, N)
-  z = np.linspace(0, 3, N)
+  z = get_z()
   a = 0.3
   b = 0.8
   k_x = 2
