@@ -182,6 +182,7 @@ class QMDP_RCNN():
 	def max_pool(self):
 		# Pooling along action channel.
 		self.value_function = npy.amax(self.Qvalues,axis=0)
+		self.policy = npy.argmax(self.Qvalues,axis=0)
 
 	def conv_layer(self):
 		# Convolving current value estimate with transition filters.
@@ -226,7 +227,25 @@ class QMDP_RCNN():
 	def train_QMDPRCNN(self):
 
 		# Training without experience Replay for now. 
+		for e in range(self.epochs):
 
+			print("Training Epoch: ",e)
+
+			# For each transition in the trajectory.
+			for j in range(len(self.interp_traj)-1):
+
+				print("Training: Epoch: {0}, Time Step: {1}".format(e,j))
+				self.train_timepoint(j,e)
+
+			self.save_model()
+
+	def save_model(self):
+
+		# Saving reward, value, q, and policy.
+		npy.save("Learnt_Reward.npy",self.reward)
+		npy.save("Learnt_Policy.npy",self.policy)
+		npy.save("Learnt_Value.npy",self.value_function)
+		npy.save("Learnt_QValue.npy",self.Qvalues)
 
 def main(args):
 
