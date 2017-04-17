@@ -374,7 +374,7 @@ class QMDP_RCNN():
 		self.backprop_reward(num_epochs)
 
 		# Update Q Values: This is different from Feedback
-		self.update_Q_estimate()
+		self.update_Q_estimate(0.99)
 
 		# Recurrence. 
 		self.recurrence()
