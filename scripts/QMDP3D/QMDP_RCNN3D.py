@@ -348,7 +348,7 @@ class QMDP_RCNN():
 		trans_flip = npy.flip(npy.flip(npy.flip(self.trans,axis=1),axis=2),axis=3)
 
 		for k in range(self.action_size):
-			self.Qvalues = signal.convolve(self.value_function, trans_flip[k], 'same')
+			self.Qvalues[k] = signal.convolve(self.value_function, trans_flip[k], 'same')
 
 	def feedback(self):
 		self.max_pool()
