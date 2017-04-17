@@ -57,7 +57,6 @@ class QMDP_RCNN():
 		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
@@ -119,6 +118,166 @@ class QMDP_RCNN():
 		# Loading the transition model learnt from BPRCNN.
 		self.trans = trans
 
+	def _powerset(self, iterable):
+		# "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+		s = list(iterable)
+		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+	# VARIABLE GRID SIZE ALONG DIFFERENT DIMENSIONS:
+	def interpolate_coefficients(self, point, traj_or_action=1):
+
+		# Choose whether we are interpolating a trajectory or an action data point.
+
+		# Now lower is just uniformly -1. 
+		lower = -npy.ones(3)
+
+		# If traj_or_action is 0, it's an action, if 1, it's a trajectory.
+		# If trajectory, z lower must be 0.
+		lower[2] += traj_or_action
+
+		# grid_cell_size = traj_or_action * self.traj_cell + (1-traj_or_action)*self.action_cell
+		grid_cell_size = traj_or_action*self.grid_cell_size + (1-traj_or_action)*self.action_cell
+
+		base_indices = npy.floor((point-lower)/grid_cell_size)
+		base_point = grid_cell_size*npy.floor(point/grid_cell_size)		
+		base_lengths = point - base_point
+		bases = []
+
+		for index_set in self._powerset(range(self.dimensions)):
+			index_set = set(index_set)
+			volume = 1 
+			# point_to_add = base_point.copy()
+			index_to_add = base_indices.copy()
+
+			for i in range(self.dimensions):
+				if i in index_set:
+					side_length = base_lengths[i]			
+					# point_to_add += self.grid_cell_size[i]
+					index_to_add[i] += 1
+				else:
+					side_length = grid_cell_size[i] - base_lengths[i]
+
+				volume *= side_length / grid_cell_size[i]
+
+			# bases.append((volume, point_to_add, index_to_add))			
+			bases.append((volume, index_to_add))			
+
+		return bases
+
+	def construct_from_ext_state(self):
+
+		w = self.w
+		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
+
+	def belief_prediction(self):
+		# Implements the motion update of the Bayes Filter.
+
+		w = self.w
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
+
+		self.to_state_ext[:,:,:] = 0
+
+		for k in range(self.action_size):
+			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
+
+		# Folding over the extended belief:
+		for i in range(w):			
+			self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
+			self.to_state_ext[i,:,:] = 0
+			self.to_state_ext[:,i+1,:] += self.to_state_ext[:,i,:]
+			self.to_state_ext[:,i,:] = 0
+			self.to_state_ext[:,:,i+1] += self.to_state_ext[:,:,i]
+			self.to_state_ext[:,:,i] = 0
+
+			self.to_state_ext[dx+2*w-i-2,:,:] += self.to_state_ext[dx+2*w-i-1,:,:]
+			self.to_state_ext[dx+2*w-i-1,:,:] = 0
+			self.to_state_ext[:,dy+2*w-i-2,:] += self.to_state_ext[:,dy+2*w-i-1,:]
+			self.to_state_ext[:,dy+2*w-i-1,:] = 0
+			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
+			self.to_state_ext[:,:,dz+2*w-i-1] = 0
+		
+		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
+		self.intermed_belief /= self.intermed_belief.sum()
+
+	def belief_correction(self):
+		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
+
+		dx = self.discrete_x
+		dy = self.discrete_y
+		dz = self.discrete_z
+		
+		# h = self.h
+		# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
+
+		h = self.h
+		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+
+		# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
+		self.extended_obs_belief[:,:,:] = 0.
+		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
+		self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
+
+		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
+		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
+
+		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
+		self.to_state_belief /= self.to_state_belief.sum()
+
+	def map_triplet_to_action_canonical(self,triplet):
+
+		if triplet[0]==-1:
+			return 0
+		if triplet[0]==1:
+			return 1
+		if triplet[1]==-1:
+			return 2
+		if triplet[1]==1:
+			return 3
+		if triplet[2]==-1:
+			return 4
+		if triplet[2]==1:
+			return 5
+
+	def preprocess_canonical(self):
+		print("Preprocessing the Data.")
+
+		# Normalize trajectory.
+		norm_vector = [2.5,2.5,1.]		
+		self.orig_traj /= norm_vector
+
+		# Normalize actions (velocities).
+		self.orig_vel /= norm_vector
+		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		self.orig_vel /= vel_norm_vector
+
+		for t in range(len(self.orig_traj)):
+			
+			# Trajectory. 
+			split = self.interpolate_coefficients(self.orig_traj[t],1)
+			count = 0
+			for percent, indices in split: 
+				self.interp_traj[t,count] = indices
+				self.interp_traj_percent[t,count] = percent
+				count += 1
+
+			# Action. 
+			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+
+			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
+			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
+			self.interp_vel[t,2] = [0,0,abs(vel[2])/vel[2]]
+			self.interp_vel_percent[t] = abs(vel)
+
+			# Forcing percentages to sum to 1:
+			self.interp_vel_percent[t] /= self.interp_vel_percent[t].sum()
+
+		npy.save("Interp_Traj.npy",self.interp_traj)
+		npy.save("Interp_Vel.npy",self.interp_vel)
+		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
+		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
+
 	def parse_data(self, timepoint):
 		# Preprocess data? 
 
@@ -126,8 +285,6 @@ class QMDP_RCNN():
 		# For each of the 8 grid points, set the value of belief = percent at that point. 
 		# This should sum to 1.
 		self.beta[:] = 0.
-		# self.target_belief[:,:,:] = 0.
-
 		self.from_state_belief[:,:,:] = 0.
 
 		for k in range(8):
@@ -236,7 +393,8 @@ class QMDP_RCNN():
 
 				print("Training: Epoch: {0}, Time Step: {1}".format(e,j))
 				self.train_timepoint(j,e)
-
+ 
+ 			self.feedback()
 			self.save_model()
 
 	def save_model(self):
