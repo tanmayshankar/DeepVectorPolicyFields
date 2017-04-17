@@ -7,11 +7,6 @@ class BPRCNN():
 	def __init__(self):
 		
 		# Defining common variables.
-		self.discrete = 50
-		self.discrete_x = 50
-		self.discrete_y = 50
-		self.discrete_z = 10
-
 		self.discrete_x = 51
 		self.discrete_y = 51
 		self.discrete_z = 11
