@@ -409,6 +409,11 @@ def main(args):
 
 	qmdprcnn = QMDP_RCNN()
 
+	traj = npy.load(str(sys.argv[1]))
+	print(traj)
+	actions = npy.load(str(sys.argv[2]))
+	trans = npy.load(str(sys.argv[3]))
+
 	qmdprcnn.load_trajectory(traj,actions)
 	qmdprcnn.load_transition(trans)
 	qmdprcnn.train_QMDPRCNN()
