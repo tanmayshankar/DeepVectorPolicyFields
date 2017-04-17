@@ -334,7 +334,7 @@ class QMDP_RCNN():
 
 		# Remember, now Target Actions are not a one hot encoding; rather they are represented by beta.
 		for k in range(self.action_size):
-			self.reward[k] -= alpha * (self.softmax_q - self.beta)*self.from_state_belief
+			self.reward[k] -= alpha * (self.softmax_q[k] - self.beta[k])*self.from_state_belief
 
 	def max_pool(self):
 		# Pooling along action channel.
