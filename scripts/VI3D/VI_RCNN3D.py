@@ -73,11 +73,29 @@ class VI_RCNN():
 			self.max_pool()
 			print("Iteration: ",i)
 
-	def save_model(self):
+		self.soft_continuous_policy()
 
+	def soft_continuous_policy(self):
+
+		self.continuous_policy = npy.zeros((self.discrete_x,self.discrete_y, self.discrete_z,self.dimensions))
+		self.softmax = npy.zeros((self.action_size,self.discrete_x,self.discrete_y,self.discrete_z))
+
+		for k in range(self.action_size):
+			self.softmax[k] = npy.exp(self.Qvalues)/npy.sum(npy.exp(self.Qvalues),axis=0)
+	
+		# self.continuous_policy += self.softmax[k]
+		for i in range(self.discrete_x):
+			for j in range(self.discrete_y):
+				for k in range(self.discrete_z):
+					for act in range(self.action_size):
+
+						self.continuous_policy[i,j,k] += self.softmax[act]*self.action_space[act]
+
+	def save_model(self):
 		npy.save("Planned_Policy.npy",self.policy)
 		npy.save("Planned_Value.npy",self.value_function)
 		npy.save("Planned_QValue.npy",self.Qvalues)
+		npy.save("Continuous_Policy.npy",self.continuous_policy)
 
 def main(args):    
 
