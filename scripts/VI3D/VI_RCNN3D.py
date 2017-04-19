@@ -40,8 +40,12 @@ class VI_RCNN():
 	def load_model(self, reward, trans):
 		# Loading reward and transition. 
 		self.reward = reward
-		self.trans = npy.flip(npy.flip(npy.flip(trans,axis=0),axis=1),axis=2)
+		# self.trans = npy.flip(npy.flip(npy.flip(trans,axis=1),axis=2),axis=3)
+		self.trans = trans
 
+		for k in range(self.action_size):
+			self.trans[k] = npy.flip(npy.flip(npy.flip(self.trans[k],axis=0),axis=1),axis=2)
+		
 	def conv_layer(self):
 		# Convolutional Layer
 		for k in range(self.action_size):
@@ -80,8 +84,8 @@ class VI_RCNN():
 		self.continuous_policy = npy.zeros((self.discrete_x,self.discrete_y, self.discrete_z,self.dimensions))
 		self.softmax = npy.zeros((self.action_size,self.discrete_x,self.discrete_y,self.discrete_z))
 
-		for k in range(self.action_size):
-			self.softmax[k] = npy.exp(self.Qvalues)/npy.sum(npy.exp(self.Qvalues),axis=0)
+		# for k in range(self.action_size):
+		self.softmax = npy.exp(self.Qvalues)/(npy.sum(npy.exp(self.Qvalues),axis=0))
 	
 		# self.continuous_policy += self.softmax[k]
 		for i in range(self.discrete_x):
@@ -89,7 +93,7 @@ class VI_RCNN():
 				for k in range(self.discrete_z):
 					for act in range(self.action_size):
 
-						self.continuous_policy[i,j,k] += self.softmax[act]*self.action_space[act]
+						self.continuous_policy[i,j,k] += self.softmax[act,i,j,k]*self.action_space[act]
 
 	def save_model(self):
 		npy.save("Planned_Policy.npy",self.policy)
@@ -106,6 +110,7 @@ def main(args):
 
 	vircnn.load_model(reward,trans)
 	vircnn.recurrent_value_iteration()
+	vircnn.save_model()
 
 if __name__ == '__main__':
 	main(sys.argv)
