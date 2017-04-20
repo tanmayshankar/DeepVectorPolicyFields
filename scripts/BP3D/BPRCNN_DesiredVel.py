@@ -94,19 +94,19 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		self.orig_traj = traj[0:len(traj):5,:]
-		self.orig_vel = actions[0:len(traj):5,:]
+		# self.orig_traj = traj[0:len(traj):5,:]
+		# self.orig_vel = actions[0:len(traj):5,:]
 
 		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
 		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		# self.orig_traj = traj
-		# self.orig_vel = actions
+		self.orig_traj = traj
+		self.orig_vel = actions
 
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
 
-		self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
+		self.interp_vel = npy.zeros((len(self.orig_vel),3,3),dtype='int')
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
 		
 		# self.preprocess_trajectory()
@@ -307,7 +307,8 @@ class BPRCNN():
 		print("Preprocessing the Data.")
 
 		# Normalize trajectory.
-		norm_vector = [2.5,2.5,1.]
+		# norm_vector = [2.5,2.5,1.]
+		norm_vector = [1.,1.,1.]
 		# norm_vector = npy.array([1.1,1.1,3.])
 		# norm_vector = [3.,3.,3.]
 		self.orig_traj /= norm_vector
@@ -318,7 +319,7 @@ class BPRCNN():
 		self.orig_vel /= vel_norm_vector
 
 		# for t in range(len(self.traj)):
-		for t in range(len(self.orig_traj)):
+		for t in range(len(self.orig_traj)-1):
 			
 			# Trajectory. 
 			split = self.interpolate_coefficients(self.orig_traj[t],1)
@@ -418,7 +419,7 @@ class BPRCNN():
 
 			# Sequential training; later implement Shuffling / Experience Replay.
 			# for j in range(len(self.traj)-1):
-			for j in range(len(self.interp_traj)-1):
+			for j in range(len(self.interp_traj)-2):
 			# for j in range(1):				
 				print("REALTRAJ: {2}: Training epoch: {0} Time Step: {1}".format(i,j,file))
 				self.train_timepoint(j,i)
@@ -439,20 +440,21 @@ def main(args):
 	# Load the CSV file, ignore first line.
 	# traj_csv = npy.genfromtxt(str(sys.argv[1]),delimiter=',',usecols=[5,6,7,8,9,10,11,48,49,50,51,52,53])[1:]
 	
-	# traj = npy.load(str(sys.argv[1]))
-	# actions = npy.load(str(sys.argv[2]))
+	traj = npy.load(str(sys.argv[1]))
+	actions = npy.load(str(sys.argv[2]))
 
 	# Pick up trajectories and linear velocities as actions.
 	# bprcnn.load_trajectory(traj_csv[10000:,:3], traj_csv[10000:,7:10])
 
-	i = int(sys.argv[1])
-	FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/Data/trajectories/T{0}".format(i)
+	# i = int(sys.argv[1])
+	# FILE_DIR = "/home/tanmay/Research/Code/DeepVectorPolicyFields/Data/trajectories/T{0}".format(i)
 
-	traj = npy.load(os.path.join(FILE_DIR,"Downsamp_Actual_Traj.npy"))
-	actions = npy.load(os.path.join(FILE_DIR,"Commanded_Vel.npy"))
+	# traj = npy.load(os.path.join(FILE_DIR,"Downsamp_Actual_Traj.npy"))
+	# actions = npy.load(os.path.join(FILE_DIR,"Commanded_Vel.npy"))
 
-	bprcnn.load_trajectory(traj,actions)
-	bprcnn.train_BPRCNN(i)
+	for i in range(9):
+		bprcnn.load_trajectory(traj[i],actions[i])
+		bprcnn.train_BPRCNN(i)
 
 if __name__ == '__main__':
 	main(sys.argv)
