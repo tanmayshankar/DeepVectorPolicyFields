@@ -20,12 +20,12 @@ class QMDP_RCNN():
 		self.conv3_size = 3
 
 		self.conv1_stride = 1
-		self.conv2_stride = 2
-		self.conv3_stride = 2
+		self.conv2_stride = 1
+		self.conv3_stride = 1
 
 		self.conv1_num_filters = 10
 		self.conv2_num_filters = 10
-		self.conv3_num_filters = 10
+		self.conv3_num_filters = 6
 
 		self.dimensions = 3
 
@@ -66,6 +66,9 @@ class QMDP_RCNN():
 		# Discount
 		self.gamma = 0.95
 
+		# Defining dummy input volume.
+		self.input_volume = npy.ones((self.input_x,self.input_y,self.input_z))
+
 		# Defining belief variables.
 		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
@@ -91,6 +94,7 @@ class QMDP_RCNN():
 
 		self.extended_obs_belief = npy.zeros((self.discrete_x+self.h*2,self.discrete_y+self.h*2,self.discrete_z+self.h*2))
 
+		self.dummy_zeroes = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z, self.action_size))
 		# # Setting hyperparameters
 		# self.time_count = 0
 		# self.lamda = 1
@@ -100,10 +104,13 @@ class QMDP_RCNN():
 		# Setting training parameters: 
 		self.epochs = 5
 
-	def initialize_tensorflow_model(self):
+	def initialize_tensorflow_model(self,sess):
+
+		# Initializing Tensorflow Session: 
+		self.sess = sess
 
 		# Remember, TensorFlow wants things as: Batch / Depth / Height / Width / Channels.
-		self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x],name='input')
+		self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x,1],name='input')
 
 		# self.reward = tf.placeholder(tf.float32,shape=[None,self.discrete_x,self.discrete_y,self.discrete_z],name='reward')
 
@@ -126,7 +133,7 @@ class QMDP_RCNN():
 		# DEFINING CONVOLUTIONAL LAYER 3: 
 		# Output layer 3:
 		self.W_conv3 = tf.Variable(tf.truncated_normal([self.conv3_size,self.conv3_size,self.conv3_size,self.conv2_num_filters,self.conv3_num_filters],stddev=0.1),name='W_conv3')
-		self.b_conv2 = tf.Variable(tf.constant(0.1,shape=[self.conv3_num_filters]),name='b_conv3')
+		self.b_conv3 = tf.Variable(tf.constant(0.1,shape=[self.conv3_num_filters]),name='b_conv3')
 
 		# Reward is the "output of this convolutional layer.	"
 		self.reward = tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='SAME') + self.b_conv3
@@ -162,6 +169,9 @@ class QMDP_RCNN():
 		# CREATING SUMMARIES:
 		self.loss_summary = tf.summary.scalar('Loss',self.loss)
 		self.merged = tf.summary.merge_all()
+
+		init = tf.global_variables_initializer()
+		self.sess.run(init)
 
 	def load_trajectory(self, traj, actions):
 
@@ -357,23 +367,98 @@ class QMDP_RCNN():
 		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
 		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
 
-	def train_QMDPRCNN(self):
+	def parse_data(self,timepoint):
+		# Setting from state belief from interp_traj.
+		# For each of the 8 grid points, set the value of belief = percent at that point. 
+		# This should sum to 1.
+		self.beta[:] = 0.
+		self.from_state_belief[:,:,:] = 0.
+
+		for k in range(8):
+			# Here setting the from state; then call construct extended. 
+			self.from_state_belief[self.interp_traj[timepoint,k,0],self.interp_traj[timepoint,k,1],self.interp_traj[timepoint,k,2]] = self.interp_traj_percent[timepoint,k]
+
+		# Setting beta: This becomes the targets in Cross Entropy.
+		# Map triplet indices to action index, set that value of beta to percent.
+		for k in range(3):
+			self.beta[self.map_triplet_to_action_canonical([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
+
+		# Updating action counter of how many times each action was taken; not as important in the QMDP RCNN as BPRCNN.
+		self.action_counter += self.beta
+
+		# Parsing observation model.
+		self.observed_state = self.orig_traj[timepoint]
+		mean = self.observed_state - self.grid_cell_size*npy.floor(self.observed_state/self.grid_cell_size)
+		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.005)
+		self.obs_model /= self.obs_model.sum()
+
+		# MUST ALSO PARSE AND LOAD INPUT POINTCLOUDS.
+
+	def train_timepoint(self,timepoint):
+
+		# Parse Data:
+		self.parse_data(timepoint)
+
+		# PROCESSING BELIEFS OUTSIDE TENSORFLOW
+		# Construct the from_extended_state for belief propagation.
+		self.construct_from_ext_state()
+		
+		# Propagate belief: Convolve with Trans model and merge intermediate beliefs.
+		self.belief_prediction()
+		# Correct Intermediate Belief (Observation Fusion)
+		self.belief_correction()
+
+		# CODE FOR BACKPROP OUTSIDE TENSORFLOW; DON'T USE FOR DEEP REWARDS
+		# # Backpropagate the Cross Entropy / Negative Log Likelihood. 
+		# # Equivalent to the KL Divergence; since the target distribution is fixed.
+		# self.backprop_reward(num_epochs)
+
+		# # Update Q Values: This is different from Feedback
+		# self.update_Q_estimate(0.99)
+
+		# # Recurrence. 
+		# self.recurrence()
+
+		# TENSORFLOW TRAINING:
+		# Remember, must feed: input <--corresponding point cloud, belief <-- to_state_belief, target_beta <-- beta, pre_Qvalues <-- 0. 
+		# DO ALL RESHAPING, TRANSPOSING HERE.
+		feed_target_beta = self.beta.reshape((1,self.action_size))
+		feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
+		feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,1))
+		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.action_size))
+
+		merged_summary, loss_value, _ = self.sess.run([self.merged, self.loss, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
+
+
+	def train_QMDPRCNN(self,file_index):
 
 		for e in range(self.epochs):
-			
+			print("Training Epoch:",e)
+
+			for j in range(len(self.interp_traj)-2):
+				print("Training: File: {0}, Epoch: {1}, Time Step: {2}.".format(file_index,e,j))
+
+				# CURRENTLY TRAINING STOCHASTICALLY: NO BATCHES.
+				self.train_timepoint(j)
+
+			self.save_model()
+
+	def save_model(self):
+		# Now, we have to save the TensorFlow model instead.
+		pass
 
 def main(args):
 
 	# Create a TensorFlow session with limits on GPU usage.
 	config = tf.ConfigProto()
-	config.gpu_options.allow_growth = True	
+	# config.gpu_options.allow_growth = True	
 	sess = tf.Session(config=config)
 
 	# Create an instance of QMDP_RCNN class. 
 	qmdprcnn = QMDP_RCNN()
 
 	# Initialize the TensorFlow model.
-	qmdprcnn.initialize_tensorflow_model()
+	qmdprcnn.initialize_tensorflow_model(sess)
 
 	# Load the data to train on:
 	traj = npy.load(str(sys.argv[1]))
@@ -385,7 +470,7 @@ def main(args):
 	# Train:
 	for i in range(9):
 		qmdprcnn.load_trajectory(traj[i],actions[i])
-		qmdprcnn.train_QMDPRCNN()
+		qmdprcnn.train_QMDPRCNN(i)
 
 if __name__ == '__main__':
 	main(sys.argv)
