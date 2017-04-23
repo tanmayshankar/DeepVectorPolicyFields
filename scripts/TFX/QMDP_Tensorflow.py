@@ -8,12 +8,16 @@ class QMDP_RCNN():
 
 		self.discrete_x = 51
 		self.discrete_y = 51
-		self.discrete_z = 11
+		self.discrete_z = 32
 		self.action_size = 6
 
 		self.input_x = 51
 		self.input_y = 51
 		self.input_z = 11
+
+		self.input_x = 101
+		self.input_y = 101
+		self.input_z = 66
 
 		self.conv1_size = 3
 		self.conv2_size = 3
@@ -21,10 +25,10 @@ class QMDP_RCNN():
 
 		self.conv1_stride = 1
 		self.conv2_stride = 1
-		self.conv3_stride = 1
+		self.conv3_stride = 2
 
-		self.conv1_num_filters = 10
-		self.conv2_num_filters = 10
+		self.conv1_num_filters = 20
+		self.conv2_num_filters = 30
 		self.conv3_num_filters = 6
 
 		self.dimensions = 3
@@ -67,7 +71,8 @@ class QMDP_RCNN():
 		self.gamma = 0.95
 
 		# Defining dummy input volume.
-		self.input_volume = npy.ones((self.input_x,self.input_y,self.input_z))
+		# Introducing RGB
+		self.input_volume = npy.ones((3,self.input_x,self.input_y,self.input_z))
 
 		# Defining belief variables.
 		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
@@ -110,13 +115,17 @@ class QMDP_RCNN():
 		self.sess = sess
 
 		# Remember, TensorFlow wants things as: Batch / Depth / Height / Width / Channels.
-		self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x,1],name='input')
+		# self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x,1],name='input')
+		# Introducing RGB channel: 
+		self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x,3],name='input')
 
 		# self.reward = tf.placeholder(tf.float32,shape=[None,self.discrete_x,self.discrete_y,self.discrete_z],name='reward')
 
 		# DEFINING CONVOLUTIONAL LAYER 1:
 		# Remember, depth, height, width, in channels, out channels.
-		self.W_conv1 = tf.Variable(tf.truncated_normal([self.conv1_size,self.conv1_size,self.conv1_size,1,self.conv1_num_filters],stddev=0.1),name='W_conv1')
+		# self.W_conv1 = tf.Variable(tf.truncated_normal([self.conv1_size,self.conv1_size,self.conv1_size,1,self.conv1_num_filters],stddev=0.1),name='W_conv1')
+		# Introducing RGB channel:
+		self.W_conv1 = tf.Variable(tf.truncated_normal([self.conv1_size,self.conv1_size,self.conv1_size,3,self.conv1_num_filters],stddev=0.1),name='W_conv1')
 		self.b_conv1 = tf.Variable(tf.constant(0.1,shape=[self.conv1_num_filters]),name='b_conv1')
 
 		self.conv1 = tf.nn.conv3d(self.input,self.W_conv1,strides=[1,self.conv1_stride,self.conv1_stride,self.conv1_stride,1],padding='SAME') + self.b_conv1
@@ -136,7 +145,9 @@ class QMDP_RCNN():
 		self.b_conv3 = tf.Variable(tf.constant(0.1,shape=[self.conv3_num_filters]),name='b_conv3')
 
 		# Reward is the "output of this convolutional layer.	"
-		self.reward = tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='SAME') + self.b_conv3
+		# self.reward = tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='SAME') + self.b_conv3
+		# Converting to downsampling.
+		self.reward = tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='VALID') + self.b_conv3
 
 		# IGNORING RLNN's VIRCNN unit for now; setting pre_Qvalues to a placeholder that will be fed zeroes.
 		self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.action_size],name='pre_Qvalues')
@@ -341,7 +352,7 @@ class QMDP_RCNN():
 		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
 		self.orig_vel /= vel_norm_vector
 
-		for t in range(len(self.orig_traj)-1):
+		for t in range(len(self.orig_traj)):
 			
 			# Trajectory. 
 			split = self.interpolate_coefficients(self.orig_traj[t],1)
@@ -422,30 +433,40 @@ class QMDP_RCNN():
 		# TENSORFLOW TRAINING:
 		# Remember, must feed: input <--corresponding point cloud, belief <-- to_state_belief, target_beta <-- beta, pre_Qvalues <-- 0. 
 		# DO ALL RESHAPING, TRANSPOSING HERE.
+
+		FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/NEW_D2"
+
 		feed_target_beta = self.beta.reshape((1,self.action_size))
 		feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
-		feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,1))
+		
+		feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
+		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"Voxel_TFX_PC{0}.npy".format(timepoint))).reshape((1,self.input_z,self.input_y,self.input_x,3)))
+
 		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.action_size))
 
-		merged_summary, loss_value, _ = self.sess.run([self.merged, self.loss, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
 
+
+		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
+		return reward_val
 
 	def train_QMDPRCNN(self,file_index):
 
 		for e in range(self.epochs):
 			print("Training Epoch:",e)
 
-			for j in range(len(self.interp_traj)-2):
+			for j in range(len(self.interp_traj)-1):
 				print("Training: File: {0}, Epoch: {1}, Time Step: {2}.".format(file_index,e,j))
 
 				# CURRENTLY TRAINING STOCHASTICALLY: NO BATCHES.
-				self.train_timepoint(j)
+				reward_val = self.train_timepoint(j)
 
-			self.save_model()
+			self.save_model(reward_val)
 
-	def save_model(self):
-		# Now, we have to save the TensorFlow model instead.
-		pass
+	def save_model(self,reward_val):
+		# Now, we have to save the TensorFlow model instead.		
+
+		# npy.save("Learnt_Reward_TF.npy",self.reward.eval(session=self.sess))
+		npy.save("Learnt_Reward_TF.npy",reward_val)
 
 def main(args):
 
@@ -468,9 +489,10 @@ def main(args):
 	qmdprcnn.load_transition(trans)
 
 	# Train:
-	for i in range(9):
-		qmdprcnn.load_trajectory(traj[i],actions[i])
-		qmdprcnn.train_QMDPRCNN(i)
+	# for i in range(1):
+	i = 1
+	qmdprcnn.load_trajectory(traj[i][68:],actions[i][67:])
+	qmdprcnn.train_QMDPRCNN(i)
 
 if __name__ == '__main__':
 	main(sys.argv)
