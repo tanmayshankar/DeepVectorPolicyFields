@@ -6,8 +6,8 @@ class QMDP_RCNN():
 
 	def __init__(self):
 
-		self.discrete_x = 51
-		self.discrete_y = 51
+		self.discrete_x = 50
+		self.discrete_y = 50
 		self.discrete_z = 32
 		self.action_size = 6
 
@@ -107,7 +107,7 @@ class QMDP_RCNN():
 		# self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 5
+		self.epochs = 20
 
 	def initialize_tensorflow_model(self,sess):
 
@@ -439,18 +439,17 @@ class QMDP_RCNN():
 		feed_target_beta = self.beta.reshape((1,self.action_size))
 		feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
 		
-		feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
-		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"Voxel_TFX_PC{0}.npy".format(timepoint))).reshape((1,self.input_z,self.input_y,self.input_x,3)))
+		# feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
+		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"Voxel_TFX_PC{0}.npy".format(timepoint)))).reshape((1,self.input_z,self.input_y,self.input_x,3))
 
 		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.action_size))
-
-
 
 		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
 		return reward_val
 
 	def train_QMDPRCNN(self,file_index):
 
+		saver = tf.train.Saver(max_to_keep=None)
 		for e in range(self.epochs):
 			print("Training Epoch:",e)
 
@@ -462,10 +461,15 @@ class QMDP_RCNN():
 
 			self.save_model(reward_val)
 
+			saver.save(self.sess,"Model_{0}.ckpt".format(e))
+
 	def save_model(self,reward_val):
 		# Now, we have to save the TensorFlow model instead.		
 
 		# npy.save("Learnt_Reward_TF.npy",self.reward.eval(session=self.sess))
+		# print("Saving the Model.")
+		# saver.save(self.sess,"Model")
+
 		npy.save("Learnt_Reward_TF.npy",reward_val)
 
 def main(args):
