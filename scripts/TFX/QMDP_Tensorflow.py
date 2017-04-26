@@ -181,6 +181,8 @@ class QMDP_RCNN():
 		self.loss_summary = tf.summary.scalar('Loss',self.loss)
 		self.merged = tf.summary.merge_all()
 
+		self.saver = tf.train.Saver(max_to_keep=None)
+
 		init = tf.global_variables_initializer()
 		self.sess.run(init)
 
@@ -449,7 +451,7 @@ class QMDP_RCNN():
 
 	def train_QMDPRCNN(self,file_index):
 
-		saver = tf.train.Saver(max_to_keep=None)
+		
 		for e in range(self.epochs):
 			print("Training Epoch:",e)
 
@@ -461,7 +463,7 @@ class QMDP_RCNN():
 
 			self.save_model(reward_val)
 
-			saver.save(self.sess,"Model_{0}.ckpt".format(e))
+			self.saver.save(self.sess,"Model_{0}.ckpt".format(e))
 
 	def save_model(self,reward_val):
 		# Now, we have to save the TensorFlow model instead.		
