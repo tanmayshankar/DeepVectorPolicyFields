@@ -25,12 +25,16 @@ class BPRCNN():
 		self.action_cell = npy.ones(self.dimensions)
 
 		# Assuming lower is along all dimensions. 		
-		self.traj_lower = npy.array([-1,-1,0,-1,-1])
+		# self.traj_lower = npy.array([-1,-1,0,-1,-1])
+		self.traj_lower = npy.array([-1,-1,0])
 		self.traj_upper = +1
 
+		self.ang_traj_lower = -1
+		self.ang_traj_upper = +1
+
 		# ALWAYS EXPRESSING PHI BEFORE Theta in Indexing
-		# self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1]		
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1,self.discrete_phi-1,self.discrete_theta]		
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1]		
+		self.angular_grid_cell_size = npy.array((self.ang_traj_upper-self.ang_traj_lower)).astype(float)/[self.discrete_phi-1,self.discrete_theta]				
 
 		# SHIFTING BACK TO CANONICAL ACTIONS
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
@@ -45,16 +49,14 @@ class BPRCNN():
 		# self.trans = npy.zeros((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		# Defining angular transition models. 
-		self.theta_trans = npy.ones((self.angular_action_size,self.trans_space))
-		self.phi_trans = npy.ones((self.angular_action_size,self.trans_space))
+		self.angular_trans = npy.ones((self.angular_action_size,self.trans_space,self.trans_space))
 		
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 
 		# Normalizing angular transition models.
-		for k in range(self.angular_action_size):
-			self.theta_trans[k] /= self.theta_trans[k].sum()
-			self.phi_trans[k] /= self.phi_trans[k].sum()
+		for k in range(self.angular_action_size):			
+			self.angular_trans[k] /= self.angular_trans[k].sum()
 
 		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
@@ -154,10 +156,19 @@ class BPRCNN():
 		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
 		# self.pointset = (self.pointset+1).astype(int)
 
+		self.angular_pointset = npy.zeros((16,2))
+
+		for i in range(4):
+			for j in range(4):
+				self.angular_pointset[4*i+j] = [add[i],add[j]]
+		
+		self.alter_angular_pointset = (self.angular_pointset*self.angular_grid_cell_size).reshape(4,4,2)
+
 	def construct_from_ext_state(self):
 
 		w = self.w
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
+		self.from_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)		
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -167,13 +178,19 @@ class BPRCNN():
 		dy = self.discrete_y
 		dz = self.discrete_z
 
+		# Linear then angular
 		self.to_state_ext[:,:,:] = 0
+		self.to_angular_ext[:,:] = 0	
 
 		for k in range(self.action_size):
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
+		for k in range(self.angular_action_size):
+			self.to_angular_ext += self.angular_beta[k]*signal.convolve2d(self.from_angular_ext,self.angular_trans[k],'same')			
+
 		# Folding over the extended belief:
 		for i in range(w):			
+			# Linear folding
 			self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
 			self.to_state_ext[i,:,:] = 0
 			self.to_state_ext[:,i+1,:] += self.to_state_ext[:,i,:]
@@ -187,9 +204,27 @@ class BPRCNN():
 			self.to_state_ext[:,dy+2*w-i-1,:] = 0
 			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
 			self.to_state_ext[:,:,dz+2*w-i-1] = 0
-		
+
+			# Angular folding: This is probably the key to extending this to angular domains. 
+			self.to_angular_ext[i+1,:] += self.to_angular_ext[i,:]
+			self.to_angular_ext[i+1,:] = 0
+			self.to_angular_ext[self.discrete_phi+2*w-i-2,:] += self.to_angular_ext[self.discrete_phi+2*w-i-1,:]
+			self.to_angular_ext[self.discrete_phi+2*w-i-1,:] = 0
+
+			# Now for theta dimension:
+		left_theta = self.to_angular_ext[:,:w].copy()
+		right_theta = self.to_angular_ext[:,-w:].copy()
+
+		self.to_angular_ext[:,:w] = 0
+		self.to_angular_ext[:,-w:] = 0
+		self.to_angular_ext[:,w:2*w] += left_theta
+		self.to_angular_ext[:,-2*w:w] += right_theta
+
 		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
 		self.intermed_belief /= self.intermed_belief.sum()
+
+		self.intermed_angular_belief = copy.deepcopy(self.to_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w])
+		self.intermed_angular_belief /= self.intermed_angular_belief.sum()
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
@@ -198,22 +233,27 @@ class BPRCNN():
 		dy = self.discrete_y
 		dz = self.discrete_z
 		
-		# h = self.h
-		# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
-
 		h = self.h
 		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+		angular_obs = npy.floor((self.angular_observed_state - self.ang_traj_lower)/self.angular_grid_cell_size).astype(int)
 
 		# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
 		self.extended_obs_belief[:,:,:] = 0.
 		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
 		self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 
+		self.extended_angular_obs_belief[:,:] = 0.
+		self.extended_angular_obs_belief[h:self.discrete_phi+h,h:self.discrete_theta+h] = self.intermed_angular_belief
+		self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3],self.angular_obs_model)
+
 		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
 		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
 
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
+
+		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_phi+h,h:self.discrete_theta+h])
+		self.to_angular_belief /= self.to_angular_belief.sum()
 
 	def compute_sensitivity(self):
 
