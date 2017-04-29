@@ -7,9 +7,13 @@ class BPRCNN():
 	def __init__(self):
 		
 		# Defining common variables.
-		self.discrete_x = 51
-		self.discrete_y = 51
-		self.discrete_z = 11
+		# self.discrete_x = 51
+		# self.discrete_y = 51
+		# self.discrete_z = 11
+
+		self.discrete_x = 101
+		self.discrete_y = 101
+		self.discrete_z = 51
 
 		self.discrete_yaw = 36
 
@@ -85,7 +89,7 @@ class BPRCNN():
 		# Setting hyperparameters
 		self.time_count = 0
 		self.lamda = 1
-		self.learning_rate = 0.5
+		self.learning_rate = 2
 		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
@@ -316,8 +320,8 @@ class BPRCNN():
 
 		# Normalize actions (velocities).
 		# self.orig_vel /= norm_vector
-		# vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
-		# self.orig_vel /= vel_norm_vector
+		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		self.orig_vel /= vel_norm_vector
 
 		for t in range(len(self.orig_traj)-1):
 			
@@ -417,7 +421,7 @@ class BPRCNN():
 			print("ACTION COUNTER:", self.action_counter)
 
 	def save_model(self):
-		npy.save("Learnt_Transition.npy",self.trans)
+		npy.save("Learnt_Transition_BigLR_scaled.npy",self.trans)
 
 def main(args):    
 
