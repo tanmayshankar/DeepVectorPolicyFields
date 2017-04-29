@@ -320,6 +320,8 @@ class BPRCNN():
 
 		# Normalize actions (velocities).
 		# self.orig_vel /= norm_vector
+
+		# Currently only max norm per dimension.
 		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
 		self.orig_vel /= vel_norm_vector
 
