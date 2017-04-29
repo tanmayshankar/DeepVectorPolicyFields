@@ -11,11 +11,12 @@ class BPRCNN():
 		self.discrete_y = 51
 		self.discrete_z = 11
 
-		# Orientation discretization.
+		# angular discretization.
 		self.discrete_theta = 36
 		self.discrete_phi = 19
 
 		self.dimensions = 3
+		self.angular_dimensions = 2
 		self.action_size = 6
 
 		# Setting discretization variables
@@ -34,8 +35,8 @@ class BPRCNN():
 		# SHIFTING BACK TO CANONICAL ACTIONS
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
-		self.orientation_action_size = 4
-		self.orientation_action_space = npy.array([-1,0],[1,0],[0,-1],[0,1])
+		self.angular_action_size = 4
+		self.angular_action_space = npy.array([-1,0],[1,0],[0,-1],[0,1])
 		# Negative theta, positive theta., negative phi, positive phi.
 
 		# Defining transition model.
@@ -43,19 +44,19 @@ class BPRCNN():
 		
 		# self.trans = npy.zeros((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
-		# Defining orientation transition models. 
-		self.theta_trans = npy.ones((self.orientation_action_size,self.trans_space))
-		self.phi_trans = npy.ones((self.orientation_action_size,self.trans_space))
+		# Defining angular transition models. 
+		self.theta_trans = npy.ones((self.angular_action_size,self.trans_space))
+		self.phi_trans = npy.ones((self.angular_action_size,self.trans_space))
 		
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 
-		# Normalizing orientation transition models.
-		for k in range(self.orientation_action_size):
+		# Normalizing angular transition models.
+		for k in range(self.angular_action_size):
 			self.theta_trans[k] /= self.theta_trans[k].sum()
 			self.phi_trans[k] /= self.phi_trans[k].sum()
 
-		self.action_counter = npy.zeros(self.action_size+self.orientation_action_size)
+		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
 		self.obs_space = 5
 		
@@ -69,7 +70,7 @@ class BPRCNN():
 		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 
-		# Defining orientation beliefs.
+		# Defining angular beliefs.
 		self.from_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
 		self.to_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
 		self.target_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
@@ -81,7 +82,7 @@ class BPRCNN():
 		self.to_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 		self.from_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 
-		# Extended orientation belief states. 
+		# Extended angular belief states. 
 		self.to_angular_ext = npy.zeros((self.discrete_phi+2*self.w,self.discrete_theta+2*self.w))
 		self.from_angular_ext = npy.zeros((self.discrete_phi+2*self.w,self.discrete_theta+2*self.w))
 
@@ -90,7 +91,7 @@ class BPRCNN():
 		self.orig_vel = []
 
 		self.beta = npy.zeros(self.action_size)
-		self.orientation_beta = npy.zeros(self.orientation_action_size)
+		self.angular_beta = npy.zeros(self.angular_action_size)
 
 		# Defining observation model related variables. 
 		self.obs_space = 4
@@ -100,7 +101,7 @@ class BPRCNN():
 		self.h = self.obs_space-1
 		self.extended_obs_belief = npy.zeros((self.discrete_x+self.h*2,self.discrete_y+self.h*2,self.discrete_z+self.h*2))
 		self.extended_angular_obs_belief = npy.zeros((self.discrete_phi+self.h*2,self.discrete_theta+2*self.h))
-		
+
 		# Setting hyperparameters
 		self.time_count = 0
 		self.lamda = 1
@@ -122,12 +123,20 @@ class BPRCNN():
 		self.orig_traj = traj
 		self.orig_vel = actions
 
+		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
 
 		self.interp_vel = npy.zeros((len(self.orig_vel),3,3),dtype='int')
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
 		
+		# Angular trajectory interplation and velocity interpolation arrays.
+		self.interp_angular_traj = npy.zeros((len(self.orig_traj),4,2),dtype='int')
+		self.interp_angular_percent = npy.zeros((len(self.orig_traj),4))
+
+		self.interp_angular_vel = npy.zeros((len(self.orig_vel),2,2),dtype='int')
+		self.interp_angular_vel_percent = npy.zeros((len(self.orig_vel),2))
+
 		# self.preprocess_trajectory()
 		self.preprocess_canonical()
 		self.initialize_pointset()
