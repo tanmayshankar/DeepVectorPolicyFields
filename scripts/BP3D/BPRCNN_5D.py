@@ -10,11 +10,14 @@ class BPRCNN():
 		self.discrete_x = 51
 		self.discrete_y = 51
 		self.discrete_z = 11
-		# self.discrete_yaw = 37
-		self.discrete_theta = 37
-		self.discrete_phi = 19
+		
+		# Defining discretization for orientation.
+		self.discrete_phi = 19	#18+1
+		# Yaw / Theta is special; doing 0 to 360 in 36 bits, not 36+1 bits, because it wraps around.
+		self.discrete_theta = 36
 
-		self.dimensions = 3
+		# self.dimensions = 3
+		self.dimensions = 5
 		self.action_size = 6
 
 		# Setting discretization variables
@@ -23,28 +26,41 @@ class BPRCNN():
 		self.action_cell = npy.ones(self.dimensions)
 
 		# Assuming lower is along all dimensions. 		
-		self.traj_lower = npy.array([-1,-1,0])
+		# self.traj_lower = npy.array([-1,-1,0])
+		# self.traj_upper = +1
+		self.traj_lower = npy.array([-1,-1,0,-1,0])
 		self.traj_upper = +1
-		# self.traj_cell = 0.1
-		# self.traj_cell = (	self.traj_upper-self.traj_lower)/self.
 
-		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x, self.discrete_y, self.discrete_z]		
-		# self.grid_cell_size[2] = 1./self.discrete_z
+		# self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1]		
+		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1, self.discrete_phi-1, self.discrete_theta]
 
 		# SHIFTING BACK TO CANONICAL ACTIONS
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
+		self.orientation_action_size = 2
+		self.theta_actions = npy.array([1,-1])
+		self.phi_actions = npy.array([1,-1])
 
 		# Defining transition model.
 		self.trans_space = 3
-		# self.trans = npy.random.random((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		
-		# self.trans = npy.zeros((self.action_size,self.trans_space,self.trans_space, self.trans_space))
+		# Initializing with ones:
 		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
+
+		# Defining orientation transition models. 
+		self.theta_trans = npy.ones((self.orientation_action_size,self.trans_space))
+		self.phi_trans = npy.ones((self.orientation_action_size,self.trans_space))
+		
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
 
-		self.action_counter = npy.zeros(self.action_size)
+		# Normalizing orientation transition models.
+		for k in range(self.orientation_action_size):
+			self.theta_trans[k] /= self.theta_trans[k].sum()
+			self.phi_trans[k] /= self.phi_trans[k].sum()
+
+		self.action_counter = npy.zeros(self.action_size+self.orientation_action_size)
+
 		# Defining observation model.
 		self.obs_space = 5
 		
@@ -52,27 +68,47 @@ class BPRCNN():
 		self.value_function = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
 		self.policy = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z))
 
-		# Discount
-		self.gamma = 0.95
-
-		# Defining belief variables.
+		# Defining belief variables.  
+		# POINT BASED REPRESENTATION; not bucket based. That's why we have self.discrete size and not self.discrete-1.
+		# TRANSLATIONAL BELIEFS:
 		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
-		# self.corrected_to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.intermed_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
+
+		# ORIENTATION BELIEFS: 
+		self.from_phi_belief = npy.zeros((self.discrete_phi))
+		self.from_theta_belief = npy.zeros((self.discrete_theta))
+
+		self.to_phi_belief = npy.zeros((self.discrete_phi))
+		self.to_theta_belief = npy.zeros((self.discrete_theta))
+
+		self.target_phi_belief = npy.zeros((self.discrete_phi))
+		self.target_theta_belief = npy.zeros((self.discrete_theta))
+
+		self.intermed_phi_belief = npy.zeros((self.discrete_phi))
+		self.intermed_theta_belief = npy.zeros((self.discrete_theta))
+
+		self.sensitivity_phi = npy.zeros((self.discrete_phi))
+		self.sensitivity_theta = npy.zeros((self.discrete_theta))
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
 		self.to_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 		self.from_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 
+		# Defining extended orientation belief: Only for phi.
+		self.to_phi_ext = npy.zeros((self.discrete_phi+2*self.w))
+		self.from_phi_ext = npy.zeros((self.discrete_phi+2*self.w))
+
 		# Defining trajectory
 		self.orig_traj = []
 		self.orig_vel = []
 
 		self.beta = npy.zeros(self.action_size)
+		self.phi_beta = npy.zeros(self.orientation_action_size)
+		self.theta_beta = npy.zeros(self.orientation_action_size)
 
 		# Defining observation model related variables. 
 		self.obs_space = 4
@@ -95,22 +131,27 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions):
 
 		# Assume the trajectory file has positions and velocities.
-		self.orig_traj = traj[0:len(traj):50,:]
-		self.orig_vel = actions[0:len(traj):50,:]
+		# self.orig_traj = traj[0:len(traj):50,:]
+		# self.orig_vel = actions[0:len(traj):50,:]
 
-		self.orig_vel = npy.diff(self.orig_traj,axis=0)
-		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
+		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		# self.orig_traj = traj
-		# self.orig_vel = actions
+		self.orig_traj = traj
+		self.orig_vel = actions
 
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
 
 		self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
+
+		self.interp_phi_traj = npy.zeros((len(self.orig_traj),2),dtype='int')
+		self.interp_phi_percent = npy.zeros((len(self.orig_traj),2))
+
+		self.interp_theta_traj = npy.zeros((len(self.orig_traj),2),dtype='int')
+		self.interp_phi_percent = npy.zeros((len(self.orig_traj),2))
 		
-		# self.preprocess_trajectory()
 		self.preprocess_canonical()
 		self.initialize_pointset()
 
@@ -125,12 +166,15 @@ class BPRCNN():
 					self.pointset[16*i+4*j+k] = [add[i],add[j],add[k]]
 
 		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
-		# self.pointset = (self.pointset+1).astype(int)
+		
+		# Orientation points in 1 dimension each.
+		self.orientation_pointset = npy.array([-1,0,1,2])
 
 	def construct_from_ext_state(self):
 
 		w = self.w
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
+		self.from_phi_ext[w:self.discrete_phi+w] = copy.deepcopy(self.from_phi_belief)
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -141,11 +185,16 @@ class BPRCNN():
 		dz = self.discrete_z
 
 		self.to_state_ext[:,:,:] = 0
+		self.to_phi_ext[:] = 0
 
 		for k in range(self.action_size):
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
-		# Folding over the extended belief:
+		for k in range(self.orientation_action_size):
+			self.to_phi_ext += self.phi_beta[k]*convolve1d(self.from_phi_ext,self.phi_trans[k],mode='constant',cval=0)
+			self.to_theta_belief += self.theta_beta[k]*convolve1d(self.from_theta_belief,self.beta_trans[k],mode='wrap')
+
+		# Folding over the extended belief; only have to do this for xyz and phi, not for theta.
 		for i in range(w):			
 			self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
 			self.to_state_ext[i,:,:] = 0
@@ -160,9 +209,22 @@ class BPRCNN():
 			self.to_state_ext[:,dy+2*w-i-1,:] = 0
 			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
 			self.to_state_ext[:,:,dz+2*w-i-1] = 0
+
+			self.to_phi_ext[i+1] += self.to_phi_ext[i]
+			self.to_phi_ext[i] = 0
+
+			self.to_phi_ext[self.discrete_phi+2*w-i-2] += self.to_phi_ext[self.discrete_phi+2*w-i-1]
+			self.to_phi_ext[self.discrete_phi+2*w-i-1] = 0
 		
+		# Intermediate beliefs
 		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
 		self.intermed_belief /= self.intermed_belief.sum()
+
+		# Intermediate belief for phi. For theta, the to_theta_belief is the intermediate belief.
+		self.intermed_phi_belief = copy.deepcopy(self.to_phi_ext[w:self.discrete_phi+w])
+		self.intermed_phi_belief /= self.intermed_phi_belief.sum()
+
+		self.intermed_theta_belief = copy.deepcopy(self.to_theta_belief)
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
@@ -445,3 +507,6 @@ def main(args):
 
 if __name__ == '__main__':
 	main(sys.argv)
+
+
+

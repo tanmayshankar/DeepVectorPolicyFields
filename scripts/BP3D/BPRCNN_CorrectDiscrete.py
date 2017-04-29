@@ -55,6 +55,7 @@ class BPRCNN():
 		self.gamma = 0.95
 
 		# Defining belief variables.
+		# POINT BASED REPRESENTATION; not bucket based. That's why we have self.discrete size and not self.discrete-1.
 		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.target_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))

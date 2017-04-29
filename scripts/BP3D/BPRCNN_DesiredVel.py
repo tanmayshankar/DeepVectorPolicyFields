@@ -311,6 +311,7 @@ class BPRCNN():
 		norm_vector = [1.,1.,1.]
 		# norm_vector = npy.array([1.1,1.1,3.])
 		# norm_vector = [3.,3.,3.]
+
 		self.orig_traj /= norm_vector
 
 		# Normalize actions (velocities).
@@ -318,7 +319,6 @@ class BPRCNN():
 		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
 		self.orig_vel /= vel_norm_vector
 
-		# for t in range(len(self.traj)):
 		for t in range(len(self.orig_traj)-1):
 			
 			# Trajectory. 
@@ -330,28 +330,13 @@ class BPRCNN():
 				count += 1
 
 			# Action. 
-
 			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
-			# print("Vel",vel)
+
 			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
 			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
 			self.interp_vel[t,2] = [0,0,abs(vel[2])/vel[2]]
 
-			# print(self.interp_vel[t])
-
 			self.interp_vel_percent[t] = abs(vel)
-
-			# print(self.interp_vel_percent[t])
-
-			# # split = self.interpolate_coefficients(self.actions[t]/npy.linalg.norm(self.actions[t]),0)
-			# split = self.interpolate_coefficients(self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t]),0)
-
-			# self.
-			# count = 0
-			# for percent, indices in split:
-			# 	self.interp_vel[t,count] = indices
-			# 	self.interp_vel_percent[t,count] = percent
-			# 	count += 1
 
 		npy.save("Interp_Traj.npy",self.interp_traj)
 		npy.save("Interp_Vel.npy",self.interp_vel)
