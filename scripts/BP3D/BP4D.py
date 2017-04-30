@@ -13,7 +13,6 @@ class BPRCNN():
 
 		# angular discretization.
 		self.discrete_theta = 36
-		self.discrete_phi = 19
 
 		self.dimensions = 3
 		self.angular_dimensions = 2
@@ -25,7 +24,6 @@ class BPRCNN():
 		self.action_cell = npy.ones(self.dimensions)
 
 		# Assuming lower is along all dimensions. 		
-		# self.traj_lower = npy.array([-1,-1,0,-1,-1])
 		self.traj_lower = npy.array([-1,-1,0])
 		self.traj_upper = +1
 
@@ -34,22 +32,21 @@ class BPRCNN():
 
 		# ALWAYS EXPRESSING PHI BEFORE Theta in Indexing
 		self.grid_cell_size = npy.array((self.traj_upper-self.traj_lower)).astype(float)/[self.discrete_x-1, self.discrete_y-1, self.discrete_z-1]		
-		self.angular_grid_cell_size = npy.array((self.ang_traj_upper-self.ang_traj_lower)).astype(float)/[self.discrete_phi-1,self.discrete_theta]				
+		self.angular_grid_cell_size = npy.array((self.ang_traj_upper-self.ang_traj_lower)).astype(float)/[self.discrete_theta]				
 
-		# SHIFTING BACK TO CANONICAL ACTIONS
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
-		self.angular_action_size = 4
-		self.angular_action_space = npy.array([[-1,0],[1,0],[0,-1],[0,1]])
-		# Negative theta, positive theta., negative phi, positive phi.
+
+		self.angular_action_size = 2
+		self.angular_action_space = npy.array([[-1,0],[1,0]])
+		# Negative theta, positive theta.
 
 		# Defining transition model.
 		self.trans_space = 3
 		
-		# self.trans = npy.zeros((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		# Defining angular transition models. 
-		self.angular_trans = npy.ones((self.angular_action_size,self.trans_space,self.trans_space))
+		self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
 		
 		for k in range(self.action_size):
 			self.trans[k] /= self.trans[k].sum()
@@ -62,9 +59,6 @@ class BPRCNN():
 		# Defining observation model.
 		self.obs_space = 5
 		
-		# Discount
-		self.gamma = 0.95
-
 		# Defining belief variables.
 		self.from_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 		self.to_state_belief = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
@@ -73,11 +67,11 @@ class BPRCNN():
 		self.sensitivity = npy.zeros((self.discrete_x,self.discrete_y,self.discrete_z))
 
 		# Defining angular beliefs.
-		self.from_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
-		self.to_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
-		self.target_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
-		self.intermed_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
-		self.sensitivity_angular_belief = npy.zeros((self.discrete_phi,self.discrete_theta))
+		self.from_angular_belief = npy.zeros((self.discrete_theta))
+		self.to_angular_belief = npy.zeros((self.discrete_theta))
+		self.target_angular_belief = npy.zeros((self.discrete_theta))
+		self.intermed_angular_belief = npy.zeros((self.discrete_theta))
+		self.sensitivity_angular_belief = npy.zeros((self.discrete_theta))
 
 		# Defining extended belief states. 
 		self.w = self.trans_space/2
@@ -85,8 +79,8 @@ class BPRCNN():
 		self.from_state_ext = npy.zeros((self.discrete_x+2*self.w,self.discrete_y+2*self.w,self.discrete_z+2*self.w))
 
 		# Extended angular belief states. 
-		self.to_angular_ext = npy.zeros((self.discrete_phi+2*self.w,self.discrete_theta+2*self.w))
-		self.from_angular_ext = npy.zeros((self.discrete_phi+2*self.w,self.discrete_theta+2*self.w))
+		self.to_angular_ext = npy.zeros((self.discrete_theta+2*self.w))
+		self.from_angular_ext = npy.zeros((self.discrete_theta+2*self.w))
 
 		# Defining trajectory
 		self.orig_traj = []
@@ -98,11 +92,11 @@ class BPRCNN():
 		# Defining observation model related variables. 
 		self.obs_space = 4
 		self.obs_model = npy.zeros((self.obs_space,self.obs_space,self.obs_space))
-		self.angular_obs_model = npy.zeros((self.obs_space,self.obs_space))
+		self.angular_obs_model = npy.zeros((self.obs_space))
 
 		self.h = self.obs_space-1
 		self.extended_obs_belief = npy.zeros((self.discrete_x+self.h*2,self.discrete_y+self.h*2,self.discrete_z+self.h*2))
-		self.extended_angular_obs_belief = npy.zeros((self.discrete_phi+self.h*2,self.discrete_theta+2*self.h))
+		self.extended_angular_obs_belief = npy.zeros((self.discrete_theta+2*self.h))
 
 		# Setting hyperparameters
 		self.time_count = 0
@@ -136,10 +130,10 @@ class BPRCNN():
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
 		
 		# Angular trajectory interplation and velocity interpolation arrays.
-		self.interp_angular_traj = npy.zeros((len(self.orig_traj),4,2),dtype='int')
-		self.interp_angular_percent = npy.zeros((len(self.orig_traj),4))
+		self.interp_angular_traj = npy.zeros((len(self.orig_traj),2),dtype='int')
+		self.interp_angular_percent = npy.zeros((len(self.orig_traj),2))
 
-		self.interp_angular_vel = npy.zeros((len(self.orig_vel),2,2),dtype='int')
+		self.interp_angular_vel = npy.zeros((len(self.orig_vel)),dtype='int')
 		self.interp_angular_vel_percent = npy.zeros((len(self.orig_vel),2))
 
 		self.preprocess_canonical()
@@ -157,21 +151,14 @@ class BPRCNN():
 					self.pointset[16*i+4*j+k] = [add[i],add[j],add[k]]
 
 		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
-		# self.pointset = (self.pointset+1).astype(int)
-
-		self.angular_pointset = npy.zeros((16,2))
-
-		for i in range(4):
-			for j in range(4):
-				self.angular_pointset[4*i+j] = [add[i],add[j]]
-		
-		self.alter_angular_pointset = (self.angular_pointset*self.angular_grid_cell_size).reshape(4,4,2)
+		self.angular_pointset = npy.array(add)
 
 	def construct_from_ext_state(self):
 
 		w = self.w
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
-		self.from_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)		
+		# Don't need extended state for yaw; since we use wrap convolutions.
+		# self.from_angular_ext[w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -183,13 +170,14 @@ class BPRCNN():
 
 		# Linear then angular
 		self.to_state_ext[:,:,:] = 0
-		self.to_angular_ext[:,:] = 0	
+
+		self.intermed_angular_belief[:] = 0
 
 		for k in range(self.action_size):
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
-		for k in range(self.angular_action_size):
-			self.to_angular_ext += self.angular_beta[k]*signal.convolve2d(self.from_angular_ext,self.angular_trans[k],'same')			
+		for k in range(self.angular_action_size):		
+			self.intermed_angular_belief += self.angular_beta[k]*convolve1d(self.from_angular_belief,self.angular_trans[k],'wrap')			
 
 		# Folding over the extended belief:
 		for i in range(w):			
@@ -208,26 +196,27 @@ class BPRCNN():
 			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
 			self.to_state_ext[:,:,dz+2*w-i-1] = 0
 
-			# Angular folding: This is probably the key to extending this to angular domains. 
-			self.to_angular_ext[i+1,:] += self.to_angular_ext[i,:]
-			self.to_angular_ext[i+1,:] = 0
-			self.to_angular_ext[self.discrete_phi+2*w-i-2,:] += self.to_angular_ext[self.discrete_phi+2*w-i-1,:]
-			self.to_angular_ext[self.discrete_phi+2*w-i-1,:] = 0
+			# # Angular folding: This is probably the key to extending this to angular domains. 
+			# self.to_angular_ext[i+1,:] += self.to_angular_ext[i,:]
+			# self.to_angular_ext[i+1,:] = 0
+			# self.to_angular_ext[self.discrete_phi+2*w-i-2,:] += self.to_angular_ext[self.discrete_phi+2*w-i-1,:]
+			# self.to_angular_ext[self.discrete_phi+2*w-i-1,:] = 0
 
-			# Now for theta dimension:
-		left_theta = self.to_angular_ext[:,:w].copy()
-		right_theta = self.to_angular_ext[:,-w:].copy()
+		# DON'T NEED ANGULAR FOLDING FOR WRAP CONVOLUTIONS
+		# 	# Now for theta dimension:
+		# left_theta = self.to_angular_ext[:,:w].copy()
+		# right_theta = self.to_angular_ext[:,-w:].copy()
 
-		self.to_angular_ext[:,:w] = 0
-		self.to_angular_ext[:,-w:] = 0
-		self.to_angular_ext[:,w:2*w] += left_theta
-		self.to_angular_ext[:,-2*w:w] += right_theta
+		# self.to_angular_ext[:,:w] = 0
+		# self.to_angular_ext[:,-w:] = 0
+		# self.to_angular_ext[:,w:2*w] += left_theta
+		# self.to_angular_ext[:,-2*w:w] += right_theta
 
-		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
-		self.intermed_belief /= self.intermed_belief.sum()
+		# self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
+		# self.intermed_belief /= self.intermed_belief.sum()
 
-		self.intermed_angular_belief = copy.deepcopy(self.to_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w])
-		self.intermed_angular_belief /= self.intermed_angular_belief.sum()
+		# self.intermed_angular_belief = copy.deepcopy(self.to_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w])
+		# self.intermed_angular_belief /= self.intermed_angular_belief.sum()
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
@@ -245,9 +234,9 @@ class BPRCNN():
 		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
 		self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 
-		self.extended_angular_obs_belief[:,:] = 0.
-		self.extended_angular_obs_belief[h:self.discrete_phi+h,h:self.discrete_theta+h] = self.intermed_angular_belief
-		self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3],self.angular_obs_model)
+		self.extended_angular_obs_belief[:] = 0.
+		self.extended_angular_obs_belief[h:self.discrete_theta+h] = self.intermed_angular_belief
+		self.extended_angular_obs_belief[h+angular_obs-1:h+angular_obs+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs-1:h+angular_obs+3],self.angular_obs_model)
 
 		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
 		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
@@ -255,7 +244,7 @@ class BPRCNN():
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum()
 
-		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_phi+h,h:self.discrete_theta+h])
+		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_theta+h])
 		self.to_angular_belief /= self.to_angular_belief.sum()
 
 	def compute_sensitivity(self):
@@ -271,8 +260,8 @@ class BPRCNN():
 		intermediate_sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))
 		intermediate_sensitivity[h:dx+h ,h:dy+h,h:dz+h] = self.target_belief - self.to_state_belief
 
-		intermediate_angular_sensitivity = npy.zeros((self.discrete_phi+2*h,self.discrete_theta+2*h))
-		intermediate_angular_sensitivity[h:self.discrete_phi+h, h:self.discrete_theta+h] = self.target_angular_belief - self.to_angular_belief
+		intermediate_angular_sensitivity = npy.zeros((self.discrete_theta+2*h))
+		intermediate_angular_sensitivity[h:self.discrete_theta+h] = self.target_angular_belief - self.to_angular_belief
 
 		# First linear sensitivities.
 		self.sensitivity = npy.zeros((self.discrete_x+2*h,self.discrete_y+2*h,self.discrete_z+2*h))		
@@ -281,10 +270,10 @@ class BPRCNN():
 		self.sensitivity = self.sensitivity[h:dx+h,h:dy+h,h:dz+h]
 
 		# Now angular sensitivities.
-		self.sensitivity_angular_belief = npy.zeros((self.discrete_phi+2*h,self.discrete_theta+2*h))
-		self.sensitivity_angular_belief[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3] = npy.multiply(intermediate_angular_sensitivity[h+angular_obs[0]-1:h+angular_obs[0]+3,h+angular_obs[1]-1:h+angular_obs[1]+3], self.angular_obs_model)
+		self.sensitivity_angular_belief = npy.zeros((self.discrete_theta+2*h))
+		self.sensitivity_angular_belief[h+angular_obs-1:h+angular_obs+3] = npy.multiply(intermediate_angular_sensitivity[h+angular_obs-1:h+angular_obs+3], self.angular_obs_model)
 
-		self.sensitivity_angular_belief = self.sensitivity_angular_belief[h:self.discrete_phi+h,h:self.discrete_theta+h]
+		self.sensitivity_angular_belief = self.sensitivity_angular_belief[h:self.discrete_theta+h]
 
 	def backprop_convolution(self, num_epochs):
 
@@ -301,14 +290,14 @@ class BPRCNN():
 		grad_update = -2*signal.convolve(flip_from,self.sensitivity,'valid')
 		# grad_update = -2*(self.beta.sum())*signal.convolve(flip_from,self.sensitivity,'valid')		
 
-		flip_ang_from = npy.flip(npy.flip(self.from_angular_ext,axis=0),axis=1)	
-		ang_grad_update = -2*signal.convolve2d(flip_ang_from, self.sensitivity_angular_belief,'valid')	
+		flip_ang_from = npy.flip(self.from_angular_belief)
+		ang_grad_update = -2*convolve1d(flip_ang_from, self.sensitivity_angular_belief, 'valid')
 
 		t0 = npy.zeros((self.trans_space,self.trans_space,self.trans_space))
 		t1 = npy.ones((self.trans_space,self.trans_space,self.trans_space))
 
-		at0 = npy.zeros((self.trans_space,self.trans_space))
-		at1 = npy.ones((self.trans_space,self.trans_space))
+		at0 = npy.zeros((self.trans_space))
+		at1 = npy.ones((self.trans_space))
 
 		for k in range(self.action_size):
 			act_grad_update = self.beta[k]*(grad_update + self.lamda*(self.trans[k].sum() -1.))
@@ -349,16 +338,12 @@ class BPRCNN():
 				if i in index_set:
 					side_length = base_lengths[i]			
 					
-					# Check if the dimension being added is yaw; if yes, take modulus.
-					if i==1:
-						index_to_add[i] = (index_to_add[i]+1)%(self.discrete_theta)
-					else:
-						index_to_add[i] += 1
-
+					index_to_add[i] = (index_to_add[i]+1)%(self.discrete_theta)
+					
 				else:
-					side_length = self.angular_grid_cell_size[i] - base_lengths[i]
+					side_length = self.angular_grid_cell_size - base_lengths[i]
 
-				volume *= side_length / self.angular_grid_cell_size[i]
+				volume *= side_length / self.angular_grid_cell_size
 
 			bases.append((volume, index_to_add))			
 
@@ -404,16 +389,12 @@ class BPRCNN():
 
 		return bases
 
-	def map_double_to_angular_action(self, doublet):
+	def map_singlet_to_angular_action(self, singlet):
 
-		if doublet[0]==-1:
+		if singlet==-1:
 			return 0
-		if doublet[0]==1:
+		if singlet==1:
 			return 1
-		if doublet[1]==-1:
-			return 2
-		if doublet[1]==1:
-			return 3
 
 	def map_triplet_to_action_canonical(self,triplet):
 
@@ -434,7 +415,7 @@ class BPRCNN():
 		print("Preprocessing Angular Data.")
 
 		# Loads angles from -pi to pi.
-		norm_vector = [0.5,npy.pi]
+		norm_vector = npy.pi
 
 		self.orig_orient /= norm_vector
 
@@ -453,9 +434,9 @@ class BPRCNN():
 
 			ang_vel = self.orig_angular_vel[t]
 
-			self.interp_angular_vel[t,0] = [abs(ang_vel[0])/ang_vel[0],0]
-			self.interp_angular_vel[t,1] = [0,abs(ang_vel[1])/ang_vel[1]]
-			self.interp_angular_vel_percent[t] = abs(ang_vel)
+			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
+			r = self.interp_angular_traj[t]>0
+			self.interp_angular_vel_percent[t,r] = abs(ang_vel)
 
 	def preprocess_canonical(self):
 		print("Preprocessing the Data.")
@@ -513,8 +494,8 @@ class BPRCNN():
 		self.target_belief[:,:,:] = 0.
 		self.from_state_belief[:,:,:] = 0.
 
-		self.target_angular_belief[:,:] = 0.
-		self.from_angular_belief[:,:] = 0.
+		self.target_angular_belief[:] = 0.
+		self.from_angular_belief[:] = 0.
 
 		for k in range(8):
 			
@@ -523,19 +504,20 @@ class BPRCNN():
 			# Must also set the target belief. 
 			self.target_belief[self.interp_traj[timepoint+1,k,0],self.interp_traj[timepoint+1,k,1],self.interp_traj[timepoint+1,k,2]] = self.interp_traj_percent[timepoint+1,k]
 
-		# Now repeating tfor the angular.
-		for k in range(4):
-			self.from_angular_belief[self.interp_angular_traj[timepoint,k,0],self.interp_angular_traj[timepoint,k,1]] = self.interp_angular_percent[timepoint,k]
+		# Now repeating FOR YAW:
+		for k in range(2):
+			self.from_angular_belief[self.interp_angular_traj[timepoint,k]] = self.interp_angular_percent[timepoint,k]
 			# Setting target angular belief: 
-			self.target_angular_belief[self.interp_angular_traj[timepoint+1,k,0],self.interp_angular_traj[timepoint+1,k,1]] = self.interp_angular_percent[timepoint+1,k]
+			self.target_angular_belief[self.interp_angular_traj[timepoint+1,k]] = self.interp_angular_percent[timepoint+1,k]
 
 		# Setting beta.
 		# Map triplet indices to action index, set that value of beta to percent.
 		# self.beta[self.map_triplet_to_action(self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2])] = self.interp_vel[timepoint,k,3] 	
 		for k in range(3):
 			self.beta[self.map_triplet_to_action_canonical([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
+
 		for k in range(2):
-			self.angular_beta[self.map_double_to_angular_action([self.interp_angular_vel[timepoint,k,0],self.interp_angular_vel[timepoint,k,1]])] = self.interp_angular_vel_percent[timepoint,k]
+			self.angular_beta[self.map_singlet_to_angular_action([self.interp_angular_vel[timepoint,k]])] = self.interp_angular_vel_percent[timepoint,k]
 
 		# This may be wrong; doesn't matter.
 		self.action_counter += [self.beta,self.angular_beta]
