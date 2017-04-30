@@ -109,18 +109,14 @@ class BPRCNN():
 
 	def load_trajectory(self, traj, actions, orientation, angular_vel):
 
-		# Assume the trajectory file has positions and velocities.
-		# self.orig_traj = traj[0:len(traj):5,:]
-		# self.orig_vel = actions[0:len(traj):5,:]
+		# Assume the trajectory file has positions and velocities
+		self.orig_traj = traj[0:len(traj):20,:]
+		self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
-		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
-
-		self.orig_traj = traj
-		self.orig_vel = actions
-
-		self.orig_orient = orientation
-		self.orig_angular_vel = angular_vel
+		self.orig_orient = orientation[0:len(orientation):20,:]
+		self.orig_angular_vel = npy.diff(self.orig_orient,axis=0)
+		self.orig_orient = orientation[:len(self.orig_angular_vel),:]
 
 		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
@@ -292,7 +288,7 @@ class BPRCNN():
 		# grad_update = -2*(self.beta.sum())*signal.convolve(flip_from,self.sensitivity,'valid')		
 
 		flip_ang_from = npy.flip(self.from_angular_ext,axis=0)
-		print(flip_ang_from.shape,self.sensitivity_angular_belief.shape)
+
 		ang_grad_update = -2*signal.convolve(flip_ang_from, self.sensitivity_angular_belief,'valid')
 
 		t0 = npy.zeros((self.trans_space,self.trans_space,self.trans_space))
