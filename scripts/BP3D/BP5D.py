@@ -434,7 +434,7 @@ class BPRCNN():
 		print("Preprocessing Angular Data.")
 
 		# Loads angles from -pi to pi.
-		norm_vector = [1,npy.pi]
+		norm_vector = [0.5,npy.pi]
 
 		self.orig_orient /= norm_vector
 
@@ -461,8 +461,8 @@ class BPRCNN():
 		print("Preprocessing the Data.")
 
 		# Normalize trajectory.
-		# norm_vector = [2.5,2.5,1.]
-		norm_vector = [1.,1.,1.]
+		norm_vector = [2.5,2.5,1.]
+		# norm_vector = [1.,1.,1.]
 		# norm_vector = npy.array([1.1,1.1,3.])
 		# norm_vector = [3.,3.,3.]
 
@@ -537,6 +537,7 @@ class BPRCNN():
 		for k in range(2):
 			self.angular_beta[self.map_double_to_angular_action([self.interp_angular_vel[timepoint,k,0],self.interp_angular_vel[timepoint,k,1]])] = self.interp_angular_vel_percent[timepoint,k]
 
+		# This may be wrong; doesn't matter.
 		self.action_counter += [self.beta,self.angular_beta]
 		
 		self.observed_state = self.orig_traj[timepoint]
