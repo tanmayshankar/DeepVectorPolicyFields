@@ -116,17 +116,19 @@ class BPRCNN():
 	def load_trajectory(self, traj, actions, orientation, angular_vel):
 
 		# Assume the trajectory file has positions and velocities.
-		# self.orig_traj = traj[0:len(traj):5,:]
-		# self.orig_vel = actions[0:len(traj):5,:]
+		self.orig_traj = traj[0:len(traj):20,:]
+		self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		# self.orig_vel = npy.diff(self.orig_traj,axis=0)
-		# self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
+		self.orig_orient = orientation[0:len(orientation):20,:]
+		self.orig_angular_vel = npy.diff(self.orig_orient,axis=0)
+		self.orig_orient = orientation[:len(self.orig_angular_vel),:]
 
-		self.orig_traj = traj
-		self.orig_vel = actions
+		# self.orig_traj = traj
+		# self.orig_vel = actions
 
-		self.orig_orient = orientation
-		self.orig_angular_vel = angular_vel
+		# self.orig_orient = orientation
+		# self.orig_angular_vel = angular_vel
 
 		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
@@ -319,7 +321,7 @@ class BPRCNN():
 
 		for k in range(self.angular_action_size):
 			act_ang_grad_update = self.angular_beta[k]*(ang_grad_update+self.lamda*(self.angular_trans[k].sum()-1.))
-			self.angular_trans[k] = npy.maximum(at0,npy.minimum(t1,self.angular_trans[k]-alpha*act_ang_grad_update))
+			self.angular_trans[k] = npy.maximum(at0,npy.minimum(at1,self.angular_trans[k]-alpha*act_ang_grad_update))
 
 	def recurrence(self):
 		# With Teacher Forcing: Setting next belief to the previous target / ground truth.
@@ -438,7 +440,7 @@ class BPRCNN():
 
 		self.orig_orient /= norm_vector
 
-		vel_norm_vector = npy.max(abs(self.angular_vel),axis=0)
+		vel_norm_vector = npy.max(abs(self.orig_angular_vel),axis=0)
 		self.orig_angular_vel /= vel_norm_vector
 
 		for t in range(len(self.orig_orient)-1):
@@ -473,6 +475,7 @@ class BPRCNN():
 
 		# Currently only max norm per dimension.
 		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		print(self.orig_vel)
 		self.orig_vel /= vel_norm_vector
 
 		for t in range(len(self.orig_traj)-1):
@@ -488,6 +491,7 @@ class BPRCNN():
 			# Action. 
 			# vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
 			vel = self.orig_vel[t]
+
 
 			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
 			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
@@ -538,7 +542,9 @@ class BPRCNN():
 			self.angular_beta[self.map_double_to_angular_action([self.interp_angular_vel[timepoint,k,0],self.interp_angular_vel[timepoint,k,1]])] = self.interp_angular_vel_percent[timepoint,k]
 
 		# This may be wrong; doesn't matter.
-		self.action_counter += [self.beta,self.angular_beta]
+		# self.action_counter += [self.beta,self.angular_beta]
+		self.action_counter[:self.action_size] += self.beta
+		self.action_counter[self.action_size:] += self.angular_beta
 		
 		self.observed_state = self.orig_traj[timepoint]
 		self.angular_observed_state = self.orig_orient[timepoint]
@@ -548,7 +554,7 @@ class BPRCNN():
 		self.obs_model /= self.obs_model.sum()
 
 		angular_mean = self.angular_observed_state - self.angular_grid_cell_size*npy.floor(self.angular_observed_state/self.angular_grid_cell_size)
-		self.angular_obs_model = mvn.pdf(self.alter_angular_pointset,mean=mean,cov=0.005)
+		self.angular_obs_model = mvn.pdf(self.alter_angular_pointset,mean=angular_mean,cov=0.005)
 		self.angular_obs_model /= self.angular_obs_model.sum()
 
 	def train_timepoint(self, timepoint, num_epochs):
@@ -573,7 +579,7 @@ class BPRCNN():
 		# Recurrence. 
 		self.recurrence()
 
-	def train_BPRCNN(self, file):
+	def train_BPRCNN(self):
 
 		# Iterate over number of epochs.
 		# Similar to QMDP Training paradigm.
@@ -585,7 +591,7 @@ class BPRCNN():
 			
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-2):
-				print("REALTRAJ: {2}: Training epoch: {0} Time Step: {1}".format(i,j,file))
+				print("Training epoch: {0} Time Step: {1}".format(i,j))
 				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
@@ -595,7 +601,8 @@ class BPRCNN():
 			print("ACTION COUNTER:", self.action_counter)
 
 	def save_model(self):
-		npy.save("Learnt_Transition_BigLR_scaled.npy",self.trans)
+		npy.save("Learnt_Transition_Linear.npy",self.trans)
+		npy.save("Learnt_Transition_Angular.npy",self.angular_trans)
 
 def main(args):    
 
@@ -620,9 +627,9 @@ def main(args):
 	# actions = npy.load(os.path.join(FILE_DIR,"Commanded_Vel.npy"))
 
 	# for i in range(9):
-	i=2
-	bprcnn.load_trajectory(traj[i],actions[i],orient,angular_vel)
-	bprcnn.train_BPRCNN(i)
+
+	bprcnn.load_trajectory(traj,actions,orient,angular_vel)
+	bprcnn.train_BPRCNN()
 
 if __name__ == '__main__':
 	main(sys.argv)
