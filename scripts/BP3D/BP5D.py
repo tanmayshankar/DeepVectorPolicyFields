@@ -40,7 +40,7 @@ class BPRCNN():
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
 		self.angular_action_size = 4
-		self.angular_action_space = npy.array([-1,0],[1,0],[0,-1],[0,1])
+		self.angular_action_space = npy.array([[-1,0],[1,0],[0,-1],[0,1]])
 		# Negative theta, positive theta., negative phi, positive phi.
 
 		# Defining transition model.
