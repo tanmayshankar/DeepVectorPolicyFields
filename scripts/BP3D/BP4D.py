@@ -158,7 +158,7 @@ class BPRCNN():
 		w = self.w
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
 		# Don't need extended state for yaw; since we use wrap convolutions.
-		# self.from_angular_ext[w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)
+		self.from_angular_ext[w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -177,7 +177,7 @@ class BPRCNN():
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
 		for k in range(self.angular_action_size):		
-			self.intermed_angular_belief += self.angular_beta[k]*convolve1d(self.from_angular_belief,self.angular_trans[k],'wrap')			
+			self.intermed_angular_belief += self.angular_beta[k]*convolve1d(self.from_angular_belief,self.angular_trans[k],mode='wrap')			
 
 		# Folding over the extended belief:
 		for i in range(w):			
@@ -236,7 +236,8 @@ class BPRCNN():
 
 		self.extended_angular_obs_belief[:] = 0.
 		self.extended_angular_obs_belief[h:self.discrete_theta+h] = self.intermed_angular_belief
-		self.extended_angular_obs_belief[h+angular_obs-1:h+angular_obs+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs-1:h+angular_obs+3],self.angular_obs_model)
+
+		self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3],self.angular_obs_model)
 
 		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
 		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
@@ -271,7 +272,7 @@ class BPRCNN():
 
 		# Now angular sensitivities.
 		self.sensitivity_angular_belief = npy.zeros((self.discrete_theta+2*h))
-		self.sensitivity_angular_belief[h+angular_obs-1:h+angular_obs+3] = npy.multiply(intermediate_angular_sensitivity[h+angular_obs-1:h+angular_obs+3], self.angular_obs_model)
+		self.sensitivity_angular_belief[h+angular_obs[0]-1:h+angular_obs[0]+3] = npy.multiply(intermediate_angular_sensitivity[h+angular_obs[0]-1:h+angular_obs[0]+3], self.angular_obs_model)
 
 		self.sensitivity_angular_belief = self.sensitivity_angular_belief[h:self.discrete_theta+h]
 
@@ -290,8 +291,9 @@ class BPRCNN():
 		grad_update = -2*signal.convolve(flip_from,self.sensitivity,'valid')
 		# grad_update = -2*(self.beta.sum())*signal.convolve(flip_from,self.sensitivity,'valid')		
 
-		flip_ang_from = npy.flip(self.from_angular_belief)
-		ang_grad_update = -2*convolve1d(flip_ang_from, self.sensitivity_angular_belief, 'valid')
+		flip_ang_from = npy.flip(self.from_angular_ext,axis=0)
+		print(flip_ang_from.shape,self.sensitivity_angular_belief.shape)
+		ang_grad_update = -2*signal.convolve(flip_ang_from, self.sensitivity_angular_belief,'valid')
 
 		t0 = npy.zeros((self.trans_space,self.trans_space,self.trans_space))
 		t1 = npy.ones((self.trans_space,self.trans_space,self.trans_space))
@@ -308,7 +310,7 @@ class BPRCNN():
 
 		for k in range(self.angular_action_size):
 			act_ang_grad_update = self.angular_beta[k]*(ang_grad_update+self.lamda*(self.angular_trans[k].sum()-1.))
-			self.angular_trans[k] = npy.maximum(at0,npy.minimum(t1,self.angular_trans[k]-alpha*act_ang_grad_update))
+			self.angular_trans[k] = npy.maximum(at0,npy.minimum(at1,self.angular_trans[k]-alpha*act_ang_grad_update))
 
 	def recurrence(self):
 		# With Teacher Forcing: Setting next belief to the previous target / ground truth.
@@ -324,28 +326,33 @@ class BPRCNN():
 
 		base_indices = npy.floor((angular_state-self.ang_traj_lower)/self.angular_grid_cell_size)
 		base_point = self.angular_grid_cell_size*npy.floor(angular_state/self.angular_grid_cell_size)
-
 		base_lengths = angular_state - base_point
 		bases = []
 
-		for index_set in self._powerset(range(self.angular_dimensions)):
-			index_set = set(index_set)
-			volume = 1 
+		bases.append((base_lengths,base_indices))		
+
+		index_to_add = (base_indices+1)%self.discrete_theta
+		bases.append((1.-base_lengths,index_to_add))
+
+		# for index_set in self._powerset(range(self.angular_dimensions)):
+		# 	index_set = set(index_set)
+		# 	print(index_set)
+		# 	volume = 1 
 			
-			index_to_add = base_indices.copy()
+		# 	index_to_add = base_indices.copy()
 
-			for i in range(self.angular_dimensions):
-				if i in index_set:
-					side_length = base_lengths[i]			
+		# 	for i in range(self.angular_dimensions):
+		# 		if i in index_set:
+		# 			side_length = base_lengths		
 					
-					index_to_add[i] = (index_to_add[i]+1)%(self.discrete_theta)
+		# 			index_to_add = (index_to_add+1)%(self.discrete_theta)
 					
-				else:
-					side_length = self.angular_grid_cell_size - base_lengths[i]
+		# 		else:
+		# 			side_length = self.angular_grid_cell_size - base_lengths
 
-				volume *= side_length / self.angular_grid_cell_size
+		# 		volume *= side_length / self.angular_grid_cell_size
 
-			bases.append((volume, index_to_add))			
+		# 	bases.append((volume, index_to_add))			
 
 		return bases
 
@@ -419,7 +426,7 @@ class BPRCNN():
 
 		self.orig_orient /= norm_vector
 
-		vel_norm_vector = npy.max(abs(self.angular_vel),axis=0)
+		vel_norm_vector = npy.max(abs(self.orig_angular_vel),axis=0)
 		self.orig_angular_vel /= vel_norm_vector
 
 		for t in range(len(self.orig_orient)-1):
@@ -428,6 +435,7 @@ class BPRCNN():
 			count = 0
 
 			for percent, indices in split:
+				
 				self.interp_angular_traj[t,count] = indices
 				self.interp_angular_percent[t,count] = percent
 				count +=1
@@ -517,11 +525,13 @@ class BPRCNN():
 			self.beta[self.map_triplet_to_action_canonical([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
 
 		for k in range(2):
-			self.angular_beta[self.map_singlet_to_angular_action([self.interp_angular_vel[timepoint,k]])] = self.interp_angular_vel_percent[timepoint,k]
+			# self.angular_beta[self.map_singlet_to_angular_action([self.interp_angular_vel[timepoint]])] = self.interp_angular_vel_percent[timepoint,k]
+			self.angular_beta[k] = self.interp_angular_vel_percent[timepoint,k]
 
 		# This may be wrong; doesn't matter.
-		self.action_counter += [self.beta,self.angular_beta]
-		
+		self.action_counter[:self.action_size] += self.beta
+		self.action_counter[self.action_size:] += self.angular_beta
+
 		self.observed_state = self.orig_traj[timepoint]
 		self.angular_observed_state = self.orig_orient[timepoint]
 
@@ -530,7 +540,7 @@ class BPRCNN():
 		self.obs_model /= self.obs_model.sum()
 
 		angular_mean = self.angular_observed_state - self.angular_grid_cell_size*npy.floor(self.angular_observed_state/self.angular_grid_cell_size)
-		self.angular_obs_model = mvn.pdf(self.alter_angular_pointset,mean=mean,cov=0.005)
+		self.angular_obs_model = mvn.pdf(self.angular_pointset,mean=angular_mean,cov=0.005)
 		self.angular_obs_model /= self.angular_obs_model.sum()
 
 	def train_timepoint(self, timepoint, num_epochs):
@@ -555,7 +565,7 @@ class BPRCNN():
 		# Recurrence. 
 		self.recurrence()
 
-	def train_BPRCNN(self, file):
+	def train_BPRCNN(self):
 
 		# Iterate over number of epochs.
 		# Similar to QMDP Training paradigm.
@@ -567,7 +577,7 @@ class BPRCNN():
 			
 			# for j in range(len(self.traj)-1):
 			for j in range(len(self.interp_traj)-2):
-				print("REALTRAJ: {2}: Training epoch: {0} Time Step: {1}".format(i,j,file))
+				print("Training epoch: {0} Time Step: {1}".format(i,j))
 				self.train_timepoint(j,i)
 
 			print("Saving the Model.")
@@ -602,9 +612,9 @@ def main(args):
 	# actions = npy.load(os.path.join(FILE_DIR,"Commanded_Vel.npy"))
 
 	# for i in range(9):
-	i=2
-	bprcnn.load_trajectory(traj[i],actions[i],orient,angular_vel)
-	bprcnn.train_BPRCNN(i)
+	
+	bprcnn.load_trajectory(traj,actions,orient,angular_vel)
+	bprcnn.train_BPRCNN()
 
 if __name__ == '__main__':
 	main(sys.argv)
