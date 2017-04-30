@@ -333,6 +333,7 @@ class BPRCNN():
 		s = list(iterable)
 		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
 
+		# Hello
 	def angular_interpolate_coefficients(self, angular_state):
 
 		base_indices = npy.floor((angular_state-self.ang_traj_lower)/self.angular_grid_cell_size)
