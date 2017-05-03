@@ -242,7 +242,6 @@ class BPRCNN():
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
 		self.to_state_belief /= self.to_state_belief.sum() 
 
-
 		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_theta+h])
 		self.to_angular_belief /= self.to_angular_belief.sum()
 
@@ -585,7 +584,8 @@ class BPRCNN():
 			print("ACTION COUNTER:", self.action_counter)
 
 	def save_model(self):
-		npy.save("Learnt_Transition_BigLR_scaled.npy",self.trans)
+		npy.save("Learnt_Transition_Linear.npy",self.trans)
+		npy.save("Learnt_Transition_Angular.npy",self.angular_trans)
 
 def main(args):    
 
