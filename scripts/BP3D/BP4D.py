@@ -116,7 +116,7 @@ class BPRCNN():
 
 		self.orig_orient = orientation[0:len(orientation):20]
 		self.orig_angular_vel = npy.diff(self.orig_orient,axis=0)
-		self.orig_orient = orientation[:len(self.orig_angular_vel)]
+		self.orig_orient = self.orig_orient[:len(self.orig_angular_vel)]
 
 		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
@@ -426,7 +426,7 @@ class BPRCNN():
 		vel_norm_vector = npy.max(abs(self.orig_angular_vel),axis=0)
 		self.orig_angular_vel /= vel_norm_vector
 
-		for t in range(len(self.orig_orient)-1):
+		for t in range(len(self.orig_orient)):
 
 			split = self.angular_interpolate_coefficients(self.orig_orient[t])
 			count = 0
@@ -442,6 +442,11 @@ class BPRCNN():
 			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
 			r = self.interp_angular_traj[t]>0
 			self.interp_angular_vel_percent[t,r] = abs(ang_vel)
+
+		npy.save("Interp_Yaw.npy",self.interp_angular_traj)
+		npy.save("Interp_Yaw_Percent.npy",self.interp_angular_percent)
+		npy.save("Interp_YawRate.npy",self.interp_angular_vel)
+		npy.save("Interp_YawRate_Percent.npy",self.interp_angular_vel_percent)
 
 	def preprocess_canonical(self):
 		print("Preprocessing the Data.")
@@ -461,7 +466,7 @@ class BPRCNN():
 		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
 		self.orig_vel /= vel_norm_vector
 
-		for t in range(len(self.orig_traj)-1):
+		for t in range(len(self.orig_traj)):
 			
 			# Trajectory. 
 			split = self.interpolate_coefficients(self.orig_traj[t],1)
