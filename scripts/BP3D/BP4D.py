@@ -114,9 +114,9 @@ class BPRCNN():
 		self.orig_vel = npy.diff(self.orig_traj,axis=0)
 		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
-		self.orig_orient = orientation[0:len(orientation):20,:]
+		self.orig_orient = orientation[0:len(orientation):20]
 		self.orig_angular_vel = npy.diff(self.orig_orient,axis=0)
-		self.orig_orient = orientation[:len(self.orig_angular_vel),:]
+		self.orig_orient = orientation[:len(self.orig_angular_vel)]
 
 		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
@@ -208,8 +208,9 @@ class BPRCNN():
 		# self.to_angular_ext[:,w:2*w] += left_theta
 		# self.to_angular_ext[:,-2*w:w] += right_theta
 
-		# self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
-		# self.intermed_belief /= self.intermed_belief.sum()
+		# Don't skip this for translational beliefs.
+		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
+		self.intermed_belief /= self.intermed_belief.sum()
 
 		# self.intermed_angular_belief = copy.deepcopy(self.to_angular_ext[w:self.discrete_phi+w,w:self.discrete_theta+w])
 		# self.intermed_angular_belief /= self.intermed_angular_belief.sum()
@@ -239,7 +240,8 @@ class BPRCNN():
 		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
 
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
-		self.to_state_belief /= self.to_state_belief.sum()
+		self.to_state_belief /= self.to_state_belief.sum() 
+
 
 		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_theta+h])
 		self.to_angular_belief /= self.to_angular_belief.sum()
