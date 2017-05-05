@@ -114,8 +114,10 @@ class BPRCNN():
 		self.orig_vel = npy.diff(self.orig_traj,axis=0)
 		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
+		unwrapped = npy.unwrap(orientation)
 		self.orig_orient = orientation[0:len(orientation):20]
-		self.orig_angular_vel = npy.diff(self.orig_orient,axis=0)
+		unwrapped = unwrapped[0:len(unwrapped):20]
+		self.orig_angular_vel = npy.diff(unwrapped,axis=0)
 		self.orig_orient = self.orig_orient[:len(self.orig_angular_vel)]
 
 		# Linear trajectory interpolation and velocity interpolation array.
@@ -309,6 +311,8 @@ class BPRCNN():
 			act_ang_grad_update = self.angular_beta[k]*(ang_grad_update+self.lamda*(self.angular_trans[k].sum()-1.))
 			self.angular_trans[k] = npy.maximum(at0,npy.minimum(at1,self.angular_trans[k]-alpha*act_ang_grad_update))
 
+			self.angular_trans[k] /= self.angular_trans[k].sum()
+
 	def recurrence(self):
 		# With Teacher Forcing: Setting next belief to the previous target / ground truth.
 		self.from_state_belief = copy.deepcopy(self.target_belief)
@@ -330,26 +334,6 @@ class BPRCNN():
 
 		index_to_add = (base_indices+1)%self.discrete_theta
 		bases.append((1.-base_lengths,index_to_add))
-
-		# for index_set in self._powerset(range(self.angular_dimensions)):
-		# 	index_set = set(index_set)
-		# 	print(index_set)
-		# 	volume = 1 
-			
-		# 	index_to_add = base_indices.copy()
-
-		# 	for i in range(self.angular_dimensions):
-		# 		if i in index_set:
-		# 			side_length = base_lengths		
-					
-		# 			index_to_add = (index_to_add+1)%(self.discrete_theta)
-					
-		# 		else:
-		# 			side_length = self.angular_grid_cell_size - base_lengths
-
-		# 		volume *= side_length / self.angular_grid_cell_size
-
-		# 	bases.append((volume, index_to_add))			
 
 		return bases
 
@@ -440,7 +424,11 @@ class BPRCNN():
 			ang_vel = self.orig_angular_vel[t]
 
 			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
-			r = self.interp_angular_traj[t]>0
+
+			r = self.interp_angular_vel[t].copy()
+			r += 1
+			r /= 2
+			
 			self.interp_angular_vel_percent[t,r] = abs(ang_vel)
 
 		npy.save("Interp_Yaw.npy",self.interp_angular_traj)
