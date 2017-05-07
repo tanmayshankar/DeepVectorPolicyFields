@@ -590,7 +590,7 @@ def main(args):
 	traj = npy.load(str(sys.argv[1]))
 	actions = npy.load(str(sys.argv[2]))
 
-	orient = npy.load(str(sys.argv[3]))
+	orient = -npy.load(str(sys.argv[3]))
 	angular_vel = npy.load(str(sys.argv[4]))
 
 	# Pick up trajectories and linear velocities as actions.
