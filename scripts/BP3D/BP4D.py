@@ -330,10 +330,10 @@ class BPRCNN():
 		base_lengths = angular_state - base_point
 		bases = []
 
-		bases.append((base_lengths,base_indices))		
+		bases.append((base_lengths/self.angular_grid_cell_size,base_indices))		
 
 		index_to_add = (base_indices+1)%self.discrete_theta
-		bases.append((1.-base_lengths,index_to_add))
+		bases.append((1.-base_lengths/self.angular_grid_cell_size,index_to_add))
 
 		return bases
 
