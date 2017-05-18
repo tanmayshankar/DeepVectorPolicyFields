@@ -714,8 +714,8 @@ class QMDP_RCNN():
 def main(args):
 
 	# Create a TensorFlow session with limits on GPU usage.
-	config = tf.ConfigProto()
-	config.gpu_options.allow_growth = True	
+	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
+	config = tf.ConfigProto(gpu_options=gpu_ops)
 	sess = tf.Session(config=config)
 
 	# Create an instance of QMDP_RCNN class. 
