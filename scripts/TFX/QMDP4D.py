@@ -217,21 +217,51 @@ class QMDP_RCNN():
 		init = tf.global_variables_initializer()
 		self.sess.run(init)
 
-	def load_trajectory(self, traj, actions):
+	# def load_trajectory(self, traj, actions):
 
-		# Assume the trajectory file has positions and velocities.
-		# self.orig_traj = traj[0:len(traj):5,:]
-		# self.orig_vel = actions[0:len(traj):5,:]
+	# 	# Assume the trajectory file has positions and velocities.
+	# 	# self.orig_traj = traj[0:len(traj):5,:]
+	# 	# self.orig_vel = actions[0:len(traj):5,:]
+	# 	self.orig_traj = traj
+	# 	self.orig_vel = actions
+
+	# 	self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
+	# 	self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
+
+	# 	self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
+	# 	self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
+		
+	# 	self.preprocess_canonical()
+	# 	self.initialize_pointset()
+
+	def load_trajectory(self, traj, orientation):
+
+		# Assume the trajectory file has positions and velocities
 		self.orig_traj = traj
-		self.orig_vel = actions
+		self.orig_vel = npy.diff(self.orig_traj,axis=0)
+		self.orig_traj = self.orig_traj[:len(self.orig_vel),:]
 
+		self.orig_orient = orientation
+		unwrapped = npy.unwrap(orientation)
+		self.orig_angular_vel = npy.diff(unwrapped,axis=0)
+		self.orig_orient = self.orig_orient[:len(self.orig_angular_vel)]
+
+		# Linear trajectory interpolation and velocity interpolation array.
 		self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
 		self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
 
-		self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
+		self.interp_vel = npy.zeros((len(self.orig_vel),3,3),dtype='int')
 		self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
 		
+		# Angular trajectory interplation and velocity interpolation arrays.
+		self.interp_angular_traj = npy.zeros((len(self.orig_traj),2),dtype='int')
+		self.interp_angular_percent = npy.zeros((len(self.orig_traj),2))
+
+		self.interp_angular_vel = npy.zeros((len(self.orig_vel)),dtype='int')
+		self.interp_angular_vel_percent = npy.zeros((len(self.orig_vel),2))
+
 		self.preprocess_canonical()
+		self.preprocess_angular()
 		self.initialize_pointset()
 
 	def initialize_pointset(self):
@@ -245,6 +275,7 @@ class QMDP_RCNN():
 					self.pointset[16*i+4*j+k] = [add[i],add[j],add[k]]
 
 		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
+		self.angular_pointset = npy.array(add)
 
 	def load_transition(self,trans):
 		# Loading the transition model learnt from BPRCNN.
@@ -254,6 +285,20 @@ class QMDP_RCNN():
 		# "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
 		s = list(iterable)
 		return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
+	def angular_interpolate_coefficients(self, angular_state):
+
+		base_indices = npy.floor((angular_state-self.ang_traj_lower)/self.angular_grid_cell_size)
+		base_point = self.angular_grid_cell_size*npy.floor(angular_state/self.angular_grid_cell_size)
+		base_lengths = angular_state - base_point
+		bases = []
+
+		bases.append((base_lengths/self.angular_grid_cell_size,base_indices))		
+
+		index_to_add = (base_indices+1)%self.discrete_theta
+		bases.append((1.-base_lengths/self.angular_grid_cell_size,index_to_add))
+
+		return bases
 
 	def interpolate_coefficients(self, point, traj_or_action=1):
 		# VARIABLE GRID SIZE ALONG DIFFERENT DIMENSIONS:
@@ -296,10 +341,53 @@ class QMDP_RCNN():
 
 		return bases
 
+	# def construct_from_ext_state(self):
+
+	# 	w = self.w
+	# 	self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
+
 	def construct_from_ext_state(self):
 
 		w = self.w
 		self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
+
+		# NOW USING EXTENDED ANGULAR STATE TO CONVERT THE CIRCULAR CONVOLUTION TO A LINEAR CONVOLUTION
+		self.from_angular_ext[w:self.discrete_theta+w] = copy.deepcopy(self.from_angular_belief)
+		for j in range(w):
+			self.from_angular_ext[w-j-1] = self.from_angular_belief[-1-j]
+			self.from_angular_ext[self.discrete_theta+w+j] = self.from_angular_belief[j]
+
+	# def belief_prediction(self):
+	# 	# Implements the motion update of the Bayes Filter.
+
+	# 	w = self.w
+	# 	dx = self.discrete_x
+	# 	dy = self.discrete_y
+	# 	dz = self.discrete_z
+
+	# 	self.to_state_ext[:,:,:] = 0
+
+	# 	for k in range(self.action_size):
+	# 		self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
+
+	# 	# Folding over the extended belief:
+	# 	for i in range(w):			
+	# 		self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
+	# 		self.to_state_ext[i,:,:] = 0
+	# 		self.to_state_ext[:,i+1,:] += self.to_state_ext[:,i,:]
+	# 		self.to_state_ext[:,i,:] = 0
+	# 		self.to_state_ext[:,:,i+1] += self.to_state_ext[:,:,i]
+	# 		self.to_state_ext[:,:,i] = 0
+
+	# 		self.to_state_ext[dx+2*w-i-2,:,:] += self.to_state_ext[dx+2*w-i-1,:,:]
+	# 		self.to_state_ext[dx+2*w-i-1,:,:] = 0
+	# 		self.to_state_ext[:,dy+2*w-i-2,:] += self.to_state_ext[:,dy+2*w-i-1,:]
+	# 		self.to_state_ext[:,dy+2*w-i-1,:] = 0
+	# 		self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
+	# 		self.to_state_ext[:,:,dz+2*w-i-1] = 0
+		
+	# 	self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
+	# 	self.intermed_belief /= self.intermed_belief.sum()
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -309,13 +397,21 @@ class QMDP_RCNN():
 		dy = self.discrete_y
 		dz = self.discrete_z
 
+		# Linear then angular
 		self.to_state_ext[:,:,:] = 0
+
+		self.intermed_angular_belief[:] = 0
 
 		for k in range(self.action_size):
 			self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
 
+		for k in range(self.angular_action_size):		
+			# self.intermed_angular_belief += self.angular_beta[k]*convolve1d(self.from_angular_belief,self.angular_trans[k],mode='wrap')			
+			self.intermed_angular_belief += self.angular_beta[k]*signal.convolve(self.from_angular_ext,self.angular_trans[k],'valid')			
+
 		# Folding over the extended belief:
 		for i in range(w):			
+			# Linear folding
 			self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
 			self.to_state_ext[i,:,:] = 0
 			self.to_state_ext[:,i+1,:] += self.to_state_ext[:,i,:]
@@ -329,9 +425,50 @@ class QMDP_RCNN():
 			self.to_state_ext[:,dy+2*w-i-1,:] = 0
 			self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
 			self.to_state_ext[:,:,dz+2*w-i-1] = 0
-		
+
+			# # Angular folding: This is probably the key to extending this to angular domains. 
+			# self.to_angular_ext[i+1,:] += self.to_angular_ext[i,:]
+			# self.to_angular_ext[i+1,:] = 0
+			# self.to_angular_ext[self.discrete_phi+2*w-i-2,:] += self.to_angular_ext[self.discrete_phi+2*w-i-1,:]
+			# self.to_angular_ext[self.discrete_phi+2*w-i-1,:] = 0
+
+		# DON'T NEED ANGULAR FOLDING FOR WRAP CONVOLUTIONS
+		# 	# Now for theta dimension:
+		# left_theta = self.to_angular_ext[:,:w].copy()
+		# right_theta = self.to_angular_ext[:,-w:].copy()
+
+		# self.to_angular_ext[:,:w] = 0
+		# self.to_angular_ext[:,-w:] = 0
+		# self.to_angular_ext[:,w:2*w] += left_theta
+		# self.to_angular_ext[:,-2*w:w] += right_theta
+
+		# Don't skip this for translational beliefs.
 		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
 		self.intermed_belief /= self.intermed_belief.sum()
+
+	# def belief_correction(self):
+	# 	# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
+
+	# 	dx = self.discrete_x
+	# 	dy = self.discrete_y
+	# 	dz = self.discrete_z
+		
+	# 	# h = self.h
+	# 	# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
+
+	# 	h = self.h
+	# 	obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+
+	# 	# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
+	# 	self.extended_obs_belief[:,:,:] = 0.
+	# 	self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
+	# 	self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
+
+	# 	# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
+	# 	# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
+
+	# 	self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
+	# 	self.to_state_belief /= self.to_state_belief.sum()
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
@@ -340,22 +477,28 @@ class QMDP_RCNN():
 		dy = self.discrete_y
 		dz = self.discrete_z
 		
-		# h = self.h
-		# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
-
 		h = self.h
 		obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
+		angular_obs = npy.floor((self.angular_observed_state - self.ang_traj_lower)/self.angular_grid_cell_size).astype(int)
 
 		# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
 		self.extended_obs_belief[:,:,:] = 0.
 		self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
 		self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
 
+		self.extended_angular_obs_belief[:] = 0.
+		self.extended_angular_obs_belief[h:self.discrete_theta+h] = self.intermed_angular_belief
+
+		self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3] = npy.multiply(self.extended_angular_obs_belief[h+angular_obs[0]-1:h+angular_obs[0]+3],self.angular_obs_model)
+
 		# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
 		# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
 
 		self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
-		self.to_state_belief /= self.to_state_belief.sum()
+		self.to_state_belief /= self.to_state_belief.sum() 
+
+		self.to_angular_belief = copy.deepcopy(self.extended_angular_obs_belief[h:self.discrete_theta+h])
+		self.to_angular_belief /= self.to_angular_belief.sum()
 
 	def map_triplet_to_action_canonical(self,triplet):
 
@@ -371,6 +514,50 @@ class QMDP_RCNN():
 			return 4
 		if triplet[2]==1:
 			return 5
+
+	def map_singlet_to_angular_action(self, singlet):
+
+		if singlet==-1:
+			return 0
+		if singlet==1:
+			return 1
+
+	def preprocess_angular(self):
+		print("Preprocessing Angular Data.")
+
+		# Loads angles from -pi to pi.
+		norm_vector = npy.pi
+
+		self.orig_orient /= norm_vector
+
+		vel_norm_vector = npy.max(abs(self.orig_angular_vel),axis=0)
+		self.orig_angular_vel /= vel_norm_vector
+
+		for t in range(len(self.orig_orient)):
+
+			split = self.angular_interpolate_coefficients(self.orig_orient[t])
+			count = 0
+
+			for percent, indices in split:
+				
+				self.interp_angular_traj[t,count] = indices
+				self.interp_angular_percent[t,count] = percent
+				count +=1
+
+			ang_vel = self.orig_angular_vel[t]
+
+			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
+
+			r = self.interp_angular_vel[t].copy()
+			r += 1
+			r /= 2
+			
+			self.interp_angular_vel_percent[t,r] = abs(ang_vel)
+
+		npy.save("Interp_Yaw.npy",self.interp_angular_traj)
+		npy.save("Interp_Yaw_Percent.npy",self.interp_angular_percent)
+		npy.save("Interp_YawRate.npy",self.interp_angular_vel)
+		npy.save("Interp_YawRate_Percent.npy",self.interp_angular_vel_percent)
 
 	def preprocess_canonical(self):
 		print("Preprocessing the Data.")
@@ -416,27 +603,43 @@ class QMDP_RCNN():
 		# For each of the 8 grid points, set the value of belief = percent at that point. 
 		# This should sum to 1.
 		self.beta[:] = 0.
+		self.angular_beta[:] = 0.
+
+		self.target_belief[:,:,:] = 0.
 		self.from_state_belief[:,:,:] = 0.
+
+		self.target_angular_belief[:] = 0.
+		self.from_angular_belief[:] = 0.
 
 		for k in range(8):
 			# Here setting the from state; then call construct extended. 
 			self.from_state_belief[self.interp_traj[timepoint,k,0],self.interp_traj[timepoint,k,1],self.interp_traj[timepoint,k,2]] = self.interp_traj_percent[timepoint,k]
+
+		for k in range(2):
+			self.from_angular_belief[self.interp_angular_traj[timepoint,k]] = self.interp_angular_percent[timepoint,k]
 
 		# Setting beta: This becomes the targets in Cross Entropy.
 		# Map triplet indices to action index, set that value of beta to percent.
 		for k in range(3):
 			self.beta[self.map_triplet_to_action_canonical([self.interp_vel[timepoint,k,0],self.interp_vel[timepoint,k,1],self.interp_vel[timepoint,k,2]])] = self.interp_vel_percent[timepoint,k] 
 
+		for k in range(2):
+			self.angular_beta[k] = self.interp_angular_vel_percent[timepoint,k]
+
 		# Updating action counter of how many times each action was taken; not as important in the QMDP RCNN as BPRCNN.
 		self.action_counter += self.beta
 
-		# Parsing observation model.
+		# MUST ALSO PARSE AND LOAD INPUT POINTCLOUDS.
 		self.observed_state = self.orig_traj[timepoint]
+		self.angular_observed_state = self.orig_orient[timepoint]
+
 		mean = self.observed_state - self.grid_cell_size*npy.floor(self.observed_state/self.grid_cell_size)
 		self.obs_model = mvn.pdf(self.alter_point_set,mean=mean,cov=0.005)
 		self.obs_model /= self.obs_model.sum()
 
-		# MUST ALSO PARSE AND LOAD INPUT POINTCLOUDS.
+		angular_mean = self.angular_observed_state - self.angular_grid_cell_size*npy.floor(self.angular_observed_state/self.angular_grid_cell_size)
+		self.angular_obs_model = mvn.pdf(self.angular_pointset,mean=angular_mean,cov=0.005)
+		self.angular_obs_model /= self.angular_obs_model.sum()
 
 	def train_timepoint(self,timepoint):
 
@@ -467,10 +670,13 @@ class QMDP_RCNN():
 		# Remember, must feed: input <--corresponding point cloud, belief <-- to_state_belief, target_beta <-- beta, pre_Qvalues <-- 0. 
 		# DO ALL RESHAPING, TRANSPOSING HERE.
 
+		# ASSEMBLE THE BELIEFS
+		feed_belief = npy.outer(self.to_state_belief,self.to_angular_belief).reshape((self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,1))
+
 		FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/NEW_D2"
 
 		feed_target_beta = self.beta.reshape((1,self.action_size))
-		feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
+		# feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
 		
 		# feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
 		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"Voxel_TFX_PC{0}.npy".format(timepoint)))).reshape((1,self.input_z,self.input_y,self.input_x,3))
