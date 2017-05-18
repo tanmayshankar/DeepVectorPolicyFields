@@ -673,7 +673,7 @@ class QMDP_RCNN():
 		# ASSEMBLE THE BELIEFS
 		feed_belief = npy.outer(self.to_state_belief,self.to_angular_belief).reshape((self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,1))
 
-		FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/NEW_D2"
+		FILE_DIR = "../../Data/NEW_D2"
 
 		feed_target_beta = self.beta.reshape((1,self.action_size))
 		# feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
@@ -726,7 +726,8 @@ def main(args):
 
 	# Load the data to train on:
 	traj = npy.load(str(sys.argv[1]))
-	actions = npy.load(str(sys.argv[2]))
+	# actions = npy.load(str(sys.argv[2]))
+	orient = npy.load(str(sys.argv[2]))
 	trans = npy.load(str(sys.argv[3]))
 
 	qmdprcnn.load_transition(trans)
@@ -734,7 +735,8 @@ def main(args):
 	# Train:
 	# for i in range(1):
 	i = 1
-	qmdprcnn.load_trajectory(traj[i][68:],actions[i][67:])
+	# qmdprcnn.load_trajectory(traj[i][68:],actions[i][67:])
+	qmdprcnn.load_trajectory(traj[i][68:],orient[i][68:])
 	qmdprcnn.train_QMDPRCNN(i)
 
 if __name__ == '__main__':
