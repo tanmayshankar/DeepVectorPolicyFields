@@ -671,7 +671,7 @@ class QMDP_RCNN():
 		# DO ALL RESHAPING, TRANSPOSING HERE.
 
 		# ASSEMBLE THE BELIEFS
-		feed_belief = npy.outer(self.to_state_belief,self.to_angular_belief).reshape((self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,1))
+		feed_belief = npy.outer(self.to_state_belief,self.to_angular_belief).reshape((-1,self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,1))
 
 		FILE_DIR = "../../Data/NEW_D2"
 
