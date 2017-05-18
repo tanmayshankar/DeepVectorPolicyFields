@@ -681,7 +681,7 @@ class QMDP_RCNN():
 		# feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
 		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"Voxel_TFX_PC{0}.npy".format(timepoint)))).reshape((1,self.input_z,self.input_y,self.input_x,3))
 
-		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.action_size))
+		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,self.action_size))
 
 		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
 		return reward_val
