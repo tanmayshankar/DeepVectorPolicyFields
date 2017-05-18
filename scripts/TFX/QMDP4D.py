@@ -127,7 +127,7 @@ class QMDP_RCNN():
 		self.annealing_rate = 0.1
 
 		# Setting training parameters: 
-		self.epochs = 1
+		self.epochs = 20
 
 	def initialize_tensorflow_model(self,sess):
 
