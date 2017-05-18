@@ -627,7 +627,7 @@ class QMDP_RCNN():
 			self.angular_beta[k] = self.interp_angular_vel_percent[timepoint,k]
 
 		# Updating action counter of how many times each action was taken; not as important in the QMDP RCNN as BPRCNN.
-		self.action_counter += self.beta
+		# self.action_counter += self.beta
 
 		# MUST ALSO PARSE AND LOAD INPUT POINTCLOUDS.
 		self.observed_state = self.orig_traj[timepoint]
@@ -718,6 +718,8 @@ def main(args):
 	config = tf.ConfigProto(gpu_options=gpu_ops)
 	sess = tf.Session(config=config)
 
+
+	# sess = tf.Session()
 	# Create an instance of QMDP_RCNN class. 
 	qmdprcnn = QMDP_RCNN()
 
