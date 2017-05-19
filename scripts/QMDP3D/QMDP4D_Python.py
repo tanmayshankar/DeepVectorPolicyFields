@@ -663,21 +663,19 @@ class QMDP_RCNN():
 				print("Training: File: {0}, Epoch: {1}, Time Step: {2}.".format(file_index,e,j))
 
 				# CURRENTLY TRAINING STOCHASTICALLY: NO BATCHES.
-				reward_val = self.train_timepoint(j,e)
+				self.train_timepoint(j,e)
 
 			self.feedback()
-			self.save_model(reward_val)
+			self.save_model()
 
-			self.saver.save(self.sess,"Model_{0}.ckpt".format(e))
-
-	def save_model(self,reward_val):
+	def save_model(self):
 		# Now, we have to save the TensorFlow model instead.		
 
 		# npy.save("Learnt_Reward_TF.npy",self.reward.eval(session=self.sess))
 		# print("Saving the Model.")
 		# saver.save(self.sess,"Model")
 
-		npy.save("Learnt_Reward_TF.npy",reward_val)
+		npy.save("Learnt_Reward_TF.npy",self.reward)
 
 def main(args):
 
