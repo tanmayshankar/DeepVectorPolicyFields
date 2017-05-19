@@ -95,10 +95,11 @@ class VI_RCNN():
 	def recurrent_value_iteration(self):
 		# Call Value Iteration.
 		for i in range(self.iterations):
+			print("Iteration: ",i)
 			self.conv_layer()
 			self.reward_bias()
 			self.max_pool()
-			print("Iteration: ",i)
+			
 
 		self.soft_continuous_policy()
 
