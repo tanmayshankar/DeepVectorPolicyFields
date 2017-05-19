@@ -66,16 +66,20 @@ class QMDP_RCNN():
 		# Defining transition model.
 		self.trans_space = 3
 		
-		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
+		# self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
 		# Defining angular transition models. 
-		self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
+		# self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
 		
-		for k in range(self.action_size):
-			self.trans[k] /= self.trans[k].sum()
+		# for k in range(self.action_size):
+		# 	self.trans[k] /= self.trans[k].sum()
 
-		# Normalizing angular transition models.
-		for k in range(self.angular_action_size):			
-			self.angular_trans[k] /= self.angular_trans[k].sum()
+		# # Normalizing angular transition models.
+		# for k in range(self.angular_action_size):			
+		# 	self.angular_trans[k] /= self.angular_trans[k].sum()
+
+		self.angular_trans = npy.array([[1.,0.,0.],[0.,0.,1.]])
+		# Also initialize full transition.
+
 
 		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
