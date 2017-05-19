@@ -577,7 +577,7 @@ class QMDP_RCNN():
 	def update_QMDP_values(self):
 
 		for k in range(self.action_size):
-			self.belief_space_q[k] = npy.sum(self.Qvalues[k]*self.from_state_belief)
+			self.belief_space_q[k] = npy.sum(self.Qvalues[k]*self.backprop_belief)
 
 	def calc_softmax_beta(self):
 		# Calculate the softmax values of the belief space Q values.
@@ -587,12 +587,13 @@ class QMDP_RCNN():
 		self.Qvalues = (1-decay_factor)*self.reward + decay_factor*self.Qvalues
 
 	def backprop_reward(self, timer):
+		self.backprop_belief = npy.outer(self.from_state_belief,self.from_angular_belief).reshape((self.discrete_x,self.discrete_y,self.discrete_z,self.discrete_theta))
+
 		self.update_QMDP_values()
 		self.calc_softmax_beta()
 
 		alpha = self.learning_rate - timer*self.annealing_rate
-
-		self.backprop_belief = npy.outer(self.from_state_belief,self.from_angular_belief).reshape((self.discrete_x,self.discrete_y,self.discrete_z,self.discrete_theta))
+		
 		# self.backprop_belief = npy.outer(self.from_state_belief,self.from_angular_belief).reshape((self.discrete_x,self.discrete_y,self.discrete_z,self.discrete_theta))
 
 		for k in range(self.action_size):
