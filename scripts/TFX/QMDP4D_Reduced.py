@@ -687,7 +687,7 @@ class QMDP_RCNN():
 
 		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,self.action_size))
 
-		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
+		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward_reshape, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
 		return reward_val
 
 	def train_QMDPRCNN(self,file_index):
@@ -713,7 +713,12 @@ class QMDP_RCNN():
 		# print("Saving the Model.")
 		# saver.save(self.sess,"Model")
 
+		reward_val = npy.transpose(reward_val)
+		reward_val = npy.moveaxis(reward_val,1,-1)
 		npy.save("Learnt_Reward_TF.npy",reward_val)
+
+		# Now also reshape and then save. 
+
 
 def main(args):
 
