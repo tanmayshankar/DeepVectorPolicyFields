@@ -5,10 +5,10 @@ class VI_RCNN():
 
 	def __init__(self): 
 
-		self.discrete_x = 50
-		self.discrete_y = 50
-		self.discrete_z = 32
-		self.discrete_yaw = 36
+		self.discrete_x = 33
+		self.discrete_y = 33
+		self.discrete_z = 22
+		self.discrete_yaw = 18
 
 		self.dimensions = 3
 		self.action_size = 6
@@ -35,11 +35,11 @@ class VI_RCNN():
 		self.Qvalues = npy.zeros((self.action_size,self.discrete_x,self.discrete_y, self.discrete_z, self.discrete_yaw))
 
 		# Discount
-		self.gamma = 0.98
+		self.gamma = 0.95
 		self.beta = npy.zeros(self.action_size)
 
 		# Setting number of iterations
-		self.iterations = 200
+		self.iterations = 100
 
 	def load_model(self, reward, trans):
 		# Loading reward and transition. 
@@ -63,10 +63,10 @@ class VI_RCNN():
 		# Construct extended value function - must extended along every dimension, then implement as a 4D Valid conv, instead of Same conv.
 		w = 1
 		self.extended_value = npy.zeros((self.discrete_x+2*w, self.discrete_y+2*w, self.discrete_z+2*w, self.discrete_yaw+2*w))
-		self.extended_value[:,:,:,w:-w-1] = self.value_function
+		self.extended_value[w:-w,w:-w,w:-w,w:-w] = self.value_function
 		
-		self.extended_value[:,:,:,0] = self.value_function[:,:,:,-1]
-		self.extended_value[:,:,:,-1] = self.value_function[:,:,:,0]	
+		self.extended_value[w:-w,w:-w,w:-w,0] = self.value_function[:,:,:,-1]
+		self.extended_value[w:-w,w:-w,w:-w,-1] = self.value_function[:,:,:,0]	
 
 		# Convolve.
 		for k in range(self.action_size):
