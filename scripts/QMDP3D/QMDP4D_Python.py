@@ -61,9 +61,8 @@ class QMDP_RCNN():
 		# for k in range(self.angular_action_size):			
 		# 	self.angular_trans[k] /= self.angular_trans[k].sum()
 
-		self.angular_action_size = 2
-		self.angular_action_space = npy.array([[-1,0],[1,0]])
-
+		self.angular_trans = npy.array([[1.,0.,0.],[0.,0.,1.]])
+		
 		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
 		self.obs_space = 5
