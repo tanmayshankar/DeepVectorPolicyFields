@@ -1,6 +1,5 @@
 #!/usr/bin/env python 
 from headers import *
-import tensorflow as tf
 
 class QMDP_RCNN():
 
