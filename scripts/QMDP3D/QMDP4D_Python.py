@@ -51,16 +51,19 @@ class QMDP_RCNN():
 		# Defining transition model.
 		self.trans_space = 3
 		
-		self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
-		# Defining angular transition models. 
-		self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
+		# self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space,))
+		# # Defining angular transition models. 
+		# self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
 		
-		for k in range(self.action_size):
-			self.trans[k] /= self.trans[k].sum()
+		# for k in range(self.action_size):
+		# 	self.trans[k] /= self.trans[k].sum()
 
-		# Normalizing angular transition models.
-		for k in range(self.angular_action_size):			
-			self.angular_trans[k] /= self.angular_trans[k].sum()
+		# # Normalizing angular transition models.
+		# for k in range(self.angular_action_size):			
+		# 	self.angular_trans[k] /= self.angular_trans[k].sum()
+
+		self.angular_action_size = 2
+		self.angular_action_space = npy.array([[-1,0],[1,0]])
 
 		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
@@ -276,9 +279,10 @@ class QMDP_RCNN():
 		self.alter_point_set = (self.pointset*self.grid_cell_size).reshape(4,4,4,3)
 		self.angular_pointset = npy.array(add)
 
-	def load_transition(self,trans):
+	def load_transition(self,trans, full_trans):
 		# Loading the transition model learnt from BPRCNN.
 		self.trans = trans
+		self.full_trans = full_trans
 
 	def _powerset(self, iterable):
 		# "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
@@ -679,26 +683,24 @@ class QMDP_RCNN():
 def main(args):
 
 	# Create a TensorFlow session with limits on GPU usage.
-	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
-	config = tf.ConfigProto(gpu_options=gpu_ops)
-	sess = tf.Session(config=config)
-
-
+	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
+	# config = tf.ConfigProto(gpu_options=gpu_ops)
+	# sess = tf.Session(config=config)
 	# sess = tf.Session()
 	# Create an instance of QMDP_RCNN class. 
 	qmdprcnn = QMDP_RCNN()
 
 	# Initialize the TensorFlow model.
-	qmdprcnn.initialize_tensorflow_model(sess)
+	# qmdprcnn.initialize_tensorflow_model(sess)
 
 	# Load the data to train on:
 	traj = npy.load(str(sys.argv[1]))
 	# actions = npy.load(str(sys.argv[2]))
 	orient = npy.load(str(sys.argv[2]))
 	trans = npy.load(str(sys.argv[3]))
+	full_trans = npy.load(str(sys.argv[4]))
 
-	qmdprcnn.load_transition(trans)
-
+	qmdprcnn.load_transition(trans,full_trans)
 	# Train:
 	# for i in range(1):
 	i = 1
