@@ -62,7 +62,7 @@ class QMDP_RCNN():
 		# 	self.angular_trans[k] /= self.angular_trans[k].sum()
 
 		self.angular_trans = npy.array([[1.,0.,0.],[0.,0.,1.]])
-		
+
 		self.action_counter = npy.zeros(self.action_size+self.angular_action_size)
 		# Defining observation model.
 		self.obs_space = 5
@@ -622,7 +622,7 @@ class QMDP_RCNN():
 		self.max_pool()
 		self.conv_layer()
 
-	def train_timepoint(self,timepoint):
+	def train_timepoint(self,timepoint,num_epochs):
 
 		# Parse Data:
 		self.parse_data(timepoint)
@@ -662,7 +662,7 @@ class QMDP_RCNN():
 				print("Training: File: {0}, Epoch: {1}, Time Step: {2}.".format(file_index,e,j))
 
 				# CURRENTLY TRAINING STOCHASTICALLY: NO BATCHES.
-				reward_val = self.train_timepoint(j)
+				reward_val = self.train_timepoint(j,e)
 
 			self.feedback()
 			self.save_model(reward_val)
