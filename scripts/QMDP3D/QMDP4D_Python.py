@@ -613,7 +613,7 @@ class QMDP_RCNN():
 
 		# Convolve.
 		for k in range(self.action_size):
-			self.Qvalues[k] = signal.convolve(self.extended_value,self.trans[k],'valid')
+			self.Qvalues[k] = signal.convolve(self.extended_value,self.full_trans[k],'valid')
 
 	def max_pool(self):
 		self.value_function = npy.amax(self.Qvalues,axis=0)
