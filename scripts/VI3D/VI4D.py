@@ -30,7 +30,7 @@ class VI_RCNN():
 		# Defining Value function, policy, etc. 	
 		# Now the value function and the policy etc. must be a function of XYZ and Yaw.
 		self.value_function = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z, self.discrete_yaw))
-		self.policy = npy.zeros((self.discrete_x,self.discrete_y, self.discrete_z,, self.discrete_yaw),dtype=int)
+		self.policy = npy.zeros((self.discrete_x,self.discrete_y, self.discrete_z, self.discrete_yaw),dtype=int)
 		# self.reward = npy.zeros((self.action_size,self.discrete_x,self.discrete_y, self.discrete_z, self.discrete_yaw))
 		self.Qvalues = npy.zeros((self.action_size,self.discrete_x,self.discrete_y, self.discrete_z, self.discrete_yaw))
 
