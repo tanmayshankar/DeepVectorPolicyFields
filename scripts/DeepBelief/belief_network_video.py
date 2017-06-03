@@ -11,6 +11,7 @@ import scipy.misc
 
 import numpy as np
 import logging
+
 import tensorflow as tf
 import sys
 
@@ -43,7 +44,7 @@ x = str(i)
 x = x.rjust(5,'0')
 
 FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/Cars/pdtv_frames/"
-img1 = skimage.io.imread(FILE_DIR+"Sequence_0/{0}.png".format(x))      
+img1 = skimage.io.imread(FILE_DIR+"Sequence_0/{0}.jpg".format(x))      
 
 feed_dict = {images: img1}
 batch_images = tf.expand_dims(images, 0)
@@ -53,8 +54,7 @@ with tf.name_scope("content_vgg"):
 
 print('Finished building Network.')
 
-init = tf.initialize_all_variables()
-sess.run(tf.initialize_all_variables())
+sess.run(tf.global_variables_initializer())
 
 # Setting the class we care about in life: CARS
 
@@ -62,10 +62,10 @@ sess.run(tf.initialize_all_variables())
 
 k=11
 factor = 5
-seqfl = npy.load(FILE_DIR+"File_list.npy")
+seqfl = np.load(FILE_DIR+"File_list.npy")
 # NOW ACTUALLY GOING TO RUN THIS NETWORK OVER ALL THE IMAGES:
-for seq in range(15):
-	for i in range(len(seqfl)/factor):
+for seq in range(12,15):
+	for i in range(len(seqfl[seq])/factor):
 
 		# Logistic stuff
 		x = str(factor*i)
@@ -74,7 +74,7 @@ for seq in range(15):
 		# Load the image.
 		print("Running on Sequence",seq,"Image:",i)		
 		img1 = skimage.io.imread(FILE_DIR+"Sequence_{0}/{1}.jpg".format(seq,x))
-		
+		img = copy.deepcopy(img1)
 		# Feed the image.
 		feed_dict = {images: img1}
 		batch_images = tf.expand_dims(images, 0)
@@ -96,6 +96,6 @@ for seq in range(15):
 		belief /= belief.sum()
 
 		# Saving files.
-		npy.save(FILE_DIR+"Sequence_{0}/class_{1}.npy".format(seq,x),up[0])
-		npy.save(FILE_DIR+"Sequence_{0}/scores_{1}.npy".format(seq,x),score_reshape)
-		npy.save(FILE_DIR+"Sequence_{0}/belief_{1}.npy".format(seq,x),belief)
+		np.save(FILE_DIR+"Sequence_{0}/class_{1}.npy".format(seq,x),up[0])
+		np.save(FILE_DIR+"Sequence_{0}/scores_{1}.npy".format(seq,x),score_reshape)
+		np.save(FILE_DIR+"Sequence_{0}/belief_{1}.npy".format(seq,x),belief)
