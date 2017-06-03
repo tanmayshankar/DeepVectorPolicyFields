@@ -15,7 +15,7 @@ import tensorflow as tf
 import sys
 
 import tensorflow_fcn.fcn16_vgg as fcn16_vgg
-import utils
+import tensorflow_fcn.utils as utils
 import matplotlib.pyplot as plt
 import copy
 from tensorflow.python.framework import ops
