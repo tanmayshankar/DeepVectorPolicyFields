@@ -31,8 +31,7 @@ class FCN16VGG:
 		self.wd = 5e-4
 		print("npy file loaded")
 
-	def build(self, rgb, train=False, num_classes=20, random_init_fc8=False,
-			  debug=False):
+	def build(self, rgb, train=True, num_classes, random_init_fc8=False, debug=False):
 		"""
 		Build the VGG model using loaded weights
 		Parameters
@@ -54,16 +53,7 @@ class FCN16VGG:
 		with tf.name_scope('Processing'):
 
 			# Changing to Version 1.1 API
-			# red, green, blue = tf.split(3, 3, rgb)
 			red, green, blue = tf.split(rgb,3,axis=3)
-
-
-			# assert red.get_shape().as_list()[1:] == [224, 224, 1]
-			# assert green.get_shape().as_list()[1:] == [224, 224, 1]
-			# assert blue.get_shape().as_list()[1:] == [224, 224, 1]
-
-			# Moving to Vresion 1.1. API
-			# bgr = tf.concat(3, [blue - VGG_MEAN[0],green - VGG_MEAN[1],red - VGG_MEAN[2],])
 			bgr = tf.concat([blue-VGG_MEAN[0],green-VGG_MEAN[1],red-VGG_MEAN[2]],3)
 			if debug:
 				bgr = tf.Print(bgr, [tf.shape(bgr)], message='Shape of input image: ', summarize=4, first_n=1)
