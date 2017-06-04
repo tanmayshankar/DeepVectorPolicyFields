@@ -12,7 +12,6 @@ import tensorflow as tf
 
 VGG_MEAN = [103.939, 116.779, 123.68]
 
-
 class FCN16VGG:
 	def __init__(self, vgg16_npy_path=None):
 		if vgg16_npy_path is None:
@@ -31,10 +30,10 @@ class FCN16VGG:
 		self.wd = 5e-4
 		print("npy file loaded")
 
-	def build(self, rgb, train=True, num_classes, random_init_fc8=False, debug=False):
+	def build(self, rgb, train=True, num_classes=4*18, random_init_fc8=False, debug=False):
 		"""
 		Build the VGG model using loaded weights
-		Parameters
+		Parameter
 		----------
 		rgb: image batch tensor
 			Image in rgb shap. Scaled to Intervall [0, 255]
@@ -99,7 +98,7 @@ class FCN16VGG:
 		self.upscore2 = self._upscore_layer(self.score_fr, shape=tf.shape(self.pool4), num_classes=num_classes, debug=debug, name='upscore2', ksize=4, stride=2)
 		self.score_pool4 = self._score_layer(self.pool4, "score_pool4", num_classes=num_classes)
 		self.fuse_pool4 = tf.add(self.upscore2, self.score_pool4)
-		self.upscore32 = self._upscore_layer(self.fuse_pool4, shape=tf.shape(bgr), num_classes=num_classes, debug=debug, name='upscore32', ksize=32, stride=16)
+ 		self.upscore32 = self._upscore_layer(self.fuse_pool4, shape=tf.shape(bgr), num_classes=num_classes, debug=debug, name='upscore32', ksize=32, stride=16)
 		self.pred_up = tf.argmax(self.upscore32, dimension=3)
 
 	def _max_pool(self, bottom, name, debug):
