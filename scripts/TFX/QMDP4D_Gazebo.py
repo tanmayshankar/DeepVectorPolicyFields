@@ -35,7 +35,7 @@ class QMDP_RCNN():
 		self.conv4_num_filters = 30
 
 		# angular discretization.
-		self.discrete_theta = 18
+		self.discrete_theta = 12
 		# self.dummy_zeroes = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z, self.action_size))
 		self.dummy_zeroes = npy.zeros((self.discrete_x, self.discrete_y, self.discrete_z, self.discrete_theta, self.action_size))
 
