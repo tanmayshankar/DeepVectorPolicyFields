@@ -12,6 +12,9 @@ class QMDP_RCNN():
 		self.discrete_z = 10
 
 		self.action_size = 6
+		self.angular_action_size = 2
+		self.angular_action_space = npy.array([[-1,0],[1,0]])
+		# Negative theta, positive theta.
 
 		self.input_x = 101
 		self.input_y = 101
@@ -45,7 +48,7 @@ class QMDP_RCNN():
 
 		# Final number of convolutional filters must be equal to the action space x discrete_theta.
 		# self.conv3_num_filters = self.action_size
-		self.conv5_num_filters = self.action_size*self.discrete_theta
+		self.conv5_num_filters = (self.action_size+self.angular_action_size)*self.discrete_theta
 
 		# Setting discretization variables
 		self.action_lower = -1
@@ -66,9 +69,7 @@ class QMDP_RCNN():
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
 
-		self.angular_action_size = 2
-		self.angular_action_space = npy.array([[-1,0],[1,0]])
-		# Negative theta, positive theta.
+
 
 		# Defining transition model.
 		self.trans_space = 3
@@ -150,38 +151,58 @@ class QMDP_RCNN():
 		self.input = tf.placeholder(tf.float32,shape=[None,self.input_z,self.input_y,self.input_x,3],name='input')
 
 		# self.reward = tf.placeholder(tf.float32,shape=[None,self.discrete_x,self.discrete_y,self.discrete_z],name='reward')
+		# Defining a regularizer
+		self.regularizer = tf.contrib.layers.l2_regularizer(scale=0.1)	
 
 		# DEFINING CONVOLUTIONAL LAYER 1:
 		# Remember, depth, height, width, in channels, out channels.
 		# Introducing RGB channel:
-		self.W_conv1 = tf.Variable(tf.truncated_normal([self.conv1_size,self.conv1_size,self.conv1_size,3,self.conv1_num_filters],stddev=0.1),name='W_conv1')
+		
+		self.W_conv1 = tf.get_variable("W_conv1",shape=[self.conv1_size,self.conv1_size,self.conv1_size,3,self.conv1_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
+		# self.W_conv1 = tf.Variable(tf.truncated_normal([self.conv1_size,self.conv1_size,self.conv1_size,3,self.conv1_num_filters],stddev=0.1),name='W_conv1')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv1)
+
 		self.b_conv1 = tf.Variable(tf.constant(0.1,shape=[self.conv1_num_filters]),name='b_conv1')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv1)
 		self.conv1 = tf.add(tf.nn.conv3d(self.input,self.W_conv1,strides=[1,self.conv1_stride,self.conv1_stride,self.conv1_stride,1],padding='VALID'),self.b_conv1,name='conv1_op')
 		self.relu_conv1 = tf.nn.relu(self.conv1,name='conv1_relu')
 
 		# DEFINING CONVOLUTIONAL LAYER 2: 		
 		# Conv layer 2: 
-		self.W_conv2 = tf.Variable(tf.truncated_normal([self.conv2_size,self.conv2_size,self.conv2_size,self.conv1_num_filters,self.conv2_num_filters],stddev=0.1),name='W_conv2')
+		# self.W_conv2 = tf.Variable(tf.truncated_normal([self.conv2_size,self.conv2_size,self.conv2_size,self.conv1_num_filters,self.conv2_num_filters],stddev=0.1),name='W_conv2')
+		self.W_conv2 = tf.get_variable("W_conv2",shape=[self.conv2_size,self.conv2_size,self.conv2_size,self.conv1_num_filters,self.conv2_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv2)
+		
 		self.b_conv2 = tf.Variable(tf.constant(0.1,shape=[self.conv2_num_filters]),name='b_conv2')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv2)
 		self.conv2 = tf.add(tf.nn.conv3d(self.relu_conv1,self.W_conv2,strides=[1,self.conv2_stride,self.conv2_stride,self.conv2_stride,1],padding='VALID'),self.b_conv2,name='conv2_op')
 		self.relu_conv2 = tf.nn.relu(self.conv2,name='conv2_relu')
 
 		# DEFINING CONVOLUTIONAL LAYER 3: 
 		# Conv layer 3:
-		self.W_conv3 = tf.Variable(tf.truncated_normal([self.conv3_size,self.conv3_size,self.conv3_size,self.conv2_num_filters,self.conv3_num_filters],stddev=0.1),name='W_conv3')
+		# self.W_conv3 = tf.Variable(tf.truncated_normal([self.conv3_size,self.conv3_size,self.conv3_size,self.conv2_num_filters,self.conv3_num_filters],stddev=0.1),name='W_conv3')
+		self.W_conv3 = tf.get_variable("W_conv3",shape=[self.conv3_size,self.conv3_size,self.conv3_size,self.conv2_num_filters,self.conv3_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv3)
 		self.b_conv3 = tf.Variable(tf.constant(0.1,shape=[self.conv3_num_filters]),name='b_conv3')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv3)
 		self.conv3 = tf.add(tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='VALID'),self.b_conv3,name='conv3_op')
 		self.relu_conv3 = tf.nn.relu(self.conv3,name='conv3_relu')
 
 		# DEFINING CONVOLUTIONAL LAYER 4: 
-		self.W_conv4 = tf.Variable(tf.truncated_normal([self.conv4_size,self.conv4_size,self.conv4_size,self.conv3_num_filters,self.conv4_num_filters],stddev=0.1),name='W_conv4')
+		# self.W_conv4 = tf.Variable(tf.truncated_normal([self.conv4_size,self.conv4_size,self.conv4_size,self.conv3_num_filters,self.conv4_num_filters],stddev=0.1),name='W_conv4')
+		self.W_conv4 = tf.get_variable("W_conv4",shape=[self.conv4_size,self.conv4_size,self.conv4_size,self.conv3_num_filters,self.conv4_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv4)
 		self.b_conv4 = tf.Variable(tf.constant(0.1,shape=[self.conv4_num_filters]),name='b_conv4')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv4)
 		self.conv4 = tf.add(tf.nn.conv3d(self.relu_conv3,self.W_conv4,strides=[1,self.conv4_stride,self.conv4_stride,self.conv4_stride,1],padding='VALID'),self.b_conv4,name='conv4_op')
 		self.relu_conv4 = tf.nn.relu(self.conv4,name='conv4_relu')
 
 		# DEFINING CONVOLUTIONAL LAYER 5: 
-		self.W_conv5 = tf.Variable(tf.truncated_normal([self.conv5_size,self.conv5_size,self.conv5_size,self.conv4_num_filters,self.conv5_num_filters],stddev=0.1),name='W_conv5')
+		# self.W_conv5 = tf.Variable(tf.truncated_normal([self.conv5_size,self.conv5_size,self.conv5_size,self.conv4_num_filters,self.conv5_num_filters],stddev=0.1),name='W_conv5')
+		self.W_conv5 = tf.get_variable("W_conv5",shape=[self.conv5_size,self.conv5_size,self.conv5_size,self.conv4_num_filters,self.conv5_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv5)
 		self.b_conv5 = tf.Variable(tf.constant(0.1,shape=[self.conv5_num_filters]),name='b_conv5')
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv5)
 		# self.conv5 = tf.add(tf.nn.conv3d(self.relu_conv4,self.W_conv5,strides=[1,self.conv5_stride,self.conv5_stride,self.conv5_stride,1],padding='VALID'),self.b_conv5,name='conv5_op')
 		self.reward = tf.add(tf.nn.conv3d(self.relu_conv4,self.W_conv5,strides=[1,self.conv5_stride,self.conv5_stride,self.conv5_stride,1],padding='VALID'),self.b_conv5,name='conv5_op')
 		# self.relu_conv5 = tf.nn.relu(self.conv5,name='conv5_relu')
@@ -227,9 +248,14 @@ class QMDP_RCNN():
 		# THIS IS THE CROSS ENTROPY LOSS. 	
 		self.loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_beta,logits=self.belief_space_Qvalues))
 
-		# self.regularizer = tf.contrib.layers.l2_regularizer
-		# tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, weights)
+		# self.reg_variables = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+		# self.regularizer = tf.contrib.layers.l2_regularizer(scale=1000.0)
+		# print("scale:",1000)
+		# self.reg_term = tf.contrib.layers.apply_regularization(self.regularizer, self.reg_variables)
+		
+		# self.total_loss = self.reg_term + self.loss
 		# CREATING TRAINING VARIABLES:
+		# self.train = tf.train.AdamOptimizer(1e-4).minimize(self.total_loss,name='Adam_Optimizer')
 		self.train = tf.train.AdamOptimizer(1e-4).minimize(self.loss,name='Adam_Optimizer')
 
 		# CREATING SUMMARIES:
@@ -743,6 +769,7 @@ class QMDP_RCNN():
 def main(args):
 
 	# Create a TensorFlow session with limits on GPU usage.
+	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="0,3")
 	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
 	config = tf.ConfigProto(gpu_options=gpu_ops)
 	sess = tf.Session(config=config)
