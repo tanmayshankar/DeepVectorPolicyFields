@@ -5,10 +5,15 @@ class VI_RCNN():
 
 	def __init__(self): 
 
-		self.discrete_x = 33
-		self.discrete_y = 33
-		self.discrete_z = 22
-		self.discrete_yaw = 18
+		# self.discrete_x = 33
+		# self.discrete_y = 33
+		# self.discrete_z = 22
+		# self.discrete_yaw = 18
+
+		self.discrete_x = 23
+		self.discrete_y = 23
+		self.discrete_z = 10
+		self.discrete_yaw = 12
 
 		self.dimensions = 3
 		self.action_size = 6
@@ -55,8 +60,8 @@ class VI_RCNN():
 		
 	def conv_layer(self):
 		# Convolutional Layer
-		for k in range(self.action_size):
-			self.Qvalues[k] = signal.convolve(self.value_function,self.trans[k],'same')
+		# for k in range(self.action_size):
+		# 	self.Qvalues[k] = signal.convolve(self.value_function,self.trans[k],'same')
 
 		# Now modifying convolutional layer of the VI RCNN to take into account that yaw wraps around. 
 
