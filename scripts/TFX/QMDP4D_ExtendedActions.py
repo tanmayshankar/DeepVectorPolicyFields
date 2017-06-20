@@ -49,6 +49,7 @@ class QMDP_RCNN():
 		# Final number of convolutional filters must be equal to the action space x discrete_theta.
 		# self.conv3_num_filters = self.action_size
 		self.conv5_num_filters = (self.action_size+self.angular_action_size)*self.discrete_theta
+		# self.conv5_num_filters = (self.action_size)*self.discrete_theta
 
 		# Setting discretization variables
 		self.action_lower = -1
@@ -68,8 +69,6 @@ class QMDP_RCNN():
 
 		self.action_space = npy.array([[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]])
 		# ACTIONS: LEFT, RIGHT, BACKWARD, FRONT, DOWN, UP
-
-
 
 		# Defining transition model.
 		self.trans_space = 3
@@ -171,8 +170,7 @@ class QMDP_RCNN():
 		# Conv layer 2: 
 		# self.W_conv2 = tf.Variable(tf.truncated_normal([self.conv2_size,self.conv2_size,self.conv2_size,self.conv1_num_filters,self.conv2_num_filters],stddev=0.1),name='W_conv2')
 		self.W_conv2 = tf.get_variable("W_conv2",shape=[self.conv2_size,self.conv2_size,self.conv2_size,self.conv1_num_filters,self.conv2_num_filters],initializer=tf.contrib.layers.xavier_initializer(),regularizer=self.regularizer)
-		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv2)
-		
+		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.W_conv2)		
 		self.b_conv2 = tf.Variable(tf.constant(0.1,shape=[self.conv2_num_filters]),name='b_conv2')
 		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv2)
 		self.conv2 = tf.add(tf.nn.conv3d(self.relu_conv1,self.W_conv2,strides=[1,self.conv2_stride,self.conv2_stride,self.conv2_stride,1],padding='VALID'),self.b_conv2,name='conv2_op')
@@ -215,13 +213,14 @@ class QMDP_RCNN():
 		# NOW THE REWARD SHOULD BE OF SHAPE: 
 		# <discrete_z, discrete_y, discrete_x, action_size*discrete_theta>
 
-		self.reward_reshape = tf.reshape(self.reward,shape=[-1,self.discrete_z, self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size],name='reshaped_reward')
+		# self.reward_reshape = tf.reshape(self.reward,shape=[-1,self.discrete_z, self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size],name='reshaped_reward')
+		self.reward_reshape = tf.reshape(self.reward,shape=[-1,self.discrete_z, self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size+self.angular_action_size],name='reshaped_reward')
 
 		# IGNORING RLNN's VIRCNN unit for now; setting pre_Qvalues to a placeholder that will be fed zeroes.
 			# OPTION 1: ACTION_SIZE*DISCRETE_THETA for final channel
-		# self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.action_size*self.discrete_theta],name='pre_Qvalues')
 			# OPTION 2: , DISCRETE_THETA, ACTION_SIZE. Remember, as long as you have consistent reshaping, the order doesn't matter.
-		self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size],name='pre_Qvalues')
+		# self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size],name='pre_Qvalues')
+		self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size+self.angular_action_size],name='pre_Qvalues')
 
 		# Computing Q values (across the entire space) as sum of reward and pre_Qvalues.
 		# self.Qvalues = tf.add(self.reward,self.pre_Qvalues,name='compute_Qvalues')
@@ -237,17 +236,25 @@ class QMDP_RCNN():
 		# tf.multiply supports broadcasting. The reduce sum should be along x,y and z, but not batches and action channel.
 		self.belief_space_Qvalues = tf.reduce_sum(tf.multiply(self.belief,self.Qvalues),axis=[1,2,3,4],name='compute_belief_space_Qvalues')
 
+		# Linear action belief space Q values:
+		self.linear_belief_space_Qvalues = self.belief_space_Qvalues[:,:self.action_size]
+		# Angular action belief space Q values: 
+		self.angular_belief_space_Qvalues = self.belief_space_Qvalues[:,self.action_size:]
+
 		# DON'T NEED TO EXPLICITLY COMPUTE SOFTMAX. tf.nn.softmax_cross_entropy...
 		# # Softmax over belief space Q values.
 		# self.softmax_belQ = tf.nn.softmax(self.belief_space_Qvalues)
 
 		# Placeholder for targets.
 		self.target_beta = tf.placeholder(tf.float32,shape=[None,self.action_size],name='target_actions')
+		self.target_angular_beta = tf.placeholder(tf.float32,shape=[None,self.angular_action_size],name='target_angular_actions')
 
 		# Computing the loss: 
 		# THIS IS THE CROSS ENTROPY LOSS. 	
-		self.loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_beta,logits=self.belief_space_Qvalues))
+		self.linear_loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_beta,logits=self.linear_belief_space_Qvalues))
+		self.angular_loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_angular_beta,logits=self.angular_belief_space_Qvalues))
 
+		self.loss = tf.add(self.linear_loss,self.angular_loss,name="loss_accumulation")
 		# self.reg_variables = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
 		# self.regularizer = tf.contrib.layers.l2_regularizer(scale=1000.0)
 		# print("scale:",1000)
@@ -266,23 +273,6 @@ class QMDP_RCNN():
 
 		init = tf.global_variables_initializer()
 		self.sess.run(init)
-
-	# def load_trajectory(self, traj, actions):
-
-	# 	# Assume the trajectory file has positions and velocities.
-	# 	# self.orig_traj = traj[0:len(traj):5,:]
-	# 	# self.orig_vel = actions[0:len(traj):5,:]
-	# 	self.orig_traj = traj
-	# 	self.orig_vel = actions
-
-	# 	self.interp_traj = npy.zeros((len(self.orig_traj),8,3),dtype='int')
-	# 	self.interp_traj_percent = npy.zeros((len(self.orig_traj),8))
-
-	# 	self.interp_vel = npy.zeros((len(self.orig_traj),3,3),dtype='int')
-	# 	self.interp_vel_percent = npy.zeros((len(self.orig_traj),3))
-		
-	# 	self.preprocess_canonical()
-	# 	self.initialize_pointset()
 
 	def load_trajectory(self, traj, orientation):
 
@@ -391,11 +381,6 @@ class QMDP_RCNN():
 
 		return bases
 
-	# def construct_from_ext_state(self):
-
-	# 	w = self.w
-	# 	self.from_state_ext[w:self.discrete_x+w,w:self.discrete_y+w,w:self.discrete_z+w] = copy.deepcopy(self.from_state_belief)
-
 	def construct_from_ext_state(self):
 
 		w = self.w
@@ -406,38 +391,6 @@ class QMDP_RCNN():
 		for j in range(w):
 			self.from_angular_ext[w-j-1] = self.from_angular_belief[-1-j]
 			self.from_angular_ext[self.discrete_theta+w+j] = self.from_angular_belief[j]
-
-	# def belief_prediction(self):
-	# 	# Implements the motion update of the Bayes Filter.
-
-	# 	w = self.w
-	# 	dx = self.discrete_x
-	# 	dy = self.discrete_y
-	# 	dz = self.discrete_z
-
-	# 	self.to_state_ext[:,:,:] = 0
-
-	# 	for k in range(self.action_size):
-	# 		self.to_state_ext += self.beta[k]*signal.convolve(self.from_state_ext,self.trans[k],'same')
-
-	# 	# Folding over the extended belief:
-	# 	for i in range(w):			
-	# 		self.to_state_ext[i+1,:,:] += self.to_state_ext[i,:,:]
-	# 		self.to_state_ext[i,:,:] = 0
-	# 		self.to_state_ext[:,i+1,:] += self.to_state_ext[:,i,:]
-	# 		self.to_state_ext[:,i,:] = 0
-	# 		self.to_state_ext[:,:,i+1] += self.to_state_ext[:,:,i]
-	# 		self.to_state_ext[:,:,i] = 0
-
-	# 		self.to_state_ext[dx+2*w-i-2,:,:] += self.to_state_ext[dx+2*w-i-1,:,:]
-	# 		self.to_state_ext[dx+2*w-i-1,:,:] = 0
-	# 		self.to_state_ext[:,dy+2*w-i-2,:] += self.to_state_ext[:,dy+2*w-i-1,:]
-	# 		self.to_state_ext[:,dy+2*w-i-1,:] = 0
-	# 		self.to_state_ext[:,:,dz+2*w-i-2] += self.to_state_ext[:,:,dz+2*w-i-1]
-	# 		self.to_state_ext[:,:,dz+2*w-i-1] = 0
-		
-	# 	self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
-	# 	self.intermed_belief /= self.intermed_belief.sum()
 
 	def belief_prediction(self):
 		# Implements the motion update of the Bayes Filter.
@@ -495,30 +448,6 @@ class QMDP_RCNN():
 		# Don't skip this for translational beliefs.
 		self.intermed_belief = copy.deepcopy(self.to_state_ext[w:dx+w,w:dy+w,w:dz+w])
 		self.intermed_belief /= self.intermed_belief.sum()
-
-	# def belief_correction(self):
-	# 	# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
-
-	# 	dx = self.discrete_x
-	# 	dy = self.discrete_y
-	# 	dz = self.discrete_z
-		
-	# 	# h = self.h
-	# 	# obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size)
-
-	# 	h = self.h
-	# 	obs = npy.floor((self.observed_state - self.traj_lower)/self.grid_cell_size).astype(int)
-
-	# 	# UPDATING TO THE NEW GAUSSIAN KERNEL OBSERVATION MODEL:
-	# 	self.extended_obs_belief[:,:,:] = 0.
-	# 	self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h] = self.intermed_belief		
-	# 	self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3] = npy.multiply(self.extended_obs_belief[h+obs[0]-1:h+obs[0]+3, h+obs[1]-1:h+obs[1]+3, h+obs[2]-1:h+obs[2]+3], self.obs_model)
-
-	# 	# # Actually obs[0]-h:obs[0]+h, but with extended belief, we add another h:
-	# 	# self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h] = npy.multiply(self.extended_obs_belief[obs[0]:obs[0]+2*h,obs[1]:obs[1]+2*h,obs[2]:obs[2]+2*h],self.obs_model)		
-
-	# 	self.to_state_belief = copy.deepcopy(self.extended_obs_belief[h:dx+h,h:dy+h,h:dz+h])
-	# 	self.to_state_belief /= self.to_state_belief.sum()
 
 	def belief_correction(self):
 		# Implements the Bayesian Observation Fusion to Correct the Predicted / Intermediate Belief.
@@ -726,18 +655,21 @@ class QMDP_RCNN():
 		FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/Gazebo/TF/D{0}/TFX".format(file_index+1)
 
 		feed_target_beta = self.beta.reshape((1,self.action_size))
+		feed_target_angular_beta = self.angular_beta.reshape((1,self.angular_action_size))
 		# feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
 		
 		# feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
 		rt = str(timepoint)
 		rt = rt.rjust(4,'0')
 
-		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"PC{0}.npy".format(rt))))
+		feed_input_volume = npy.transpose(npy.load(os.path.join(FILE_DIR,"NewPC{0}.npy".format(rt))))
 		feed_input_volume = feed_input_volume[:,:,:,:3].reshape((1,self.input_z,self.input_y,self.input_x,3))
 
 		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,self.action_size))
 
-		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward_reshape, self.train], feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes})
+		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward_reshape, self.train], \
+			feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes, self.target_angular_beta: feed_target_angular_beta})
+		
 		return reward_val
 
 	def train_QMDPRCNN(self,file_index, epoch):
@@ -765,12 +697,12 @@ class QMDP_RCNN():
 
 		# Now also reshape and then save. 
 
-
 def main(args):
 
 	# Create a TensorFlow session with limits on GPU usage.
 	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="0,3")
-	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
+	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
+	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="2,3")
 	config = tf.ConfigProto(gpu_options=gpu_ops)
 	sess = tf.Session(config=config)
 
