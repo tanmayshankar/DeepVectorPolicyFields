@@ -73,17 +73,6 @@ class QMDP_RCNN():
 		# Defining transition model.
 		self.trans_space = 3
 		
-		# self.trans = npy.ones((self.action_size,self.trans_space,self.trans_space, self.trans_space))
-		# Defining angular transition models. 
-		# self.angular_trans = npy.ones((self.angular_action_size,self.trans_space))
-		
-		# for k in range(self.action_size):
-		# 	self.trans[k] /= self.trans[k].sum()
-
-		# # Normalizing angular transition models.
-		# for k in range(self.angular_action_size):			
-		# 	self.angular_trans[k] /= self.angular_trans[k].sum()
-
 		self.angular_trans = npy.array([[1.,0.,0.],[0.,0.,1.]])
 		# Also initialize full transition.
 
@@ -203,13 +192,7 @@ class QMDP_RCNN():
 		tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.b_conv5)
 		# self.conv5 = tf.add(tf.nn.conv3d(self.relu_conv4,self.W_conv5,strides=[1,self.conv5_stride,self.conv5_stride,self.conv5_stride,1],padding='VALID'),self.b_conv5,name='conv5_op')
 		self.reward = tf.add(tf.nn.conv3d(self.relu_conv4,self.W_conv5,strides=[1,self.conv5_stride,self.conv5_stride,self.conv5_stride,1],padding='VALID'),self.b_conv5,name='conv5_op')
-		# self.relu_conv5 = tf.nn.relu(self.conv5,name='conv5_relu')
 
-		# Reward is the "output of this convolutional layer.	"
-		# self.reward = tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='SAME') + self.b_conv3
-		# Converting to downsampling.
-		# self.reward = tf.add(tf.nn.conv3d(self.relu_conv2,self.W_conv3,strides=[1,self.conv3_stride,self.conv3_stride,self.conv3_stride,1],padding='VALID'),self.b_conv3,name='reward')
-		
 		# NOW THE REWARD SHOULD BE OF SHAPE: 
 		# <discrete_z, discrete_y, discrete_x, action_size*discrete_theta>
 
@@ -223,7 +206,6 @@ class QMDP_RCNN():
 		self.pre_Qvalues = tf.placeholder(tf.float32,shape=[None,self.discrete_z,self.discrete_y, self.discrete_x, self.discrete_theta, self.action_size+self.angular_action_size],name='pre_Qvalues')
 
 		# Computing Q values (across the entire space) as sum of reward and pre_Qvalues.
-		# self.Qvalues = tf.add(self.reward,self.pre_Qvalues,name='compute_Qvalues')
 		self.Qvalues = tf.add(self.reward_reshape,self.pre_Qvalues,name='compute_Qvalues')
 
 		# Creating placeholder for belief. 
@@ -235,38 +217,11 @@ class QMDP_RCNN():
 		# Computing belief space Q Values.
 		# tf.multiply supports broadcasting. The reduce sum should be along x,y and z, but not batches and action channel.
 		self.belief_space_Qvalues = tf.reduce_sum(tf.multiply(self.belief,self.Qvalues),axis=[1,2,3,4],name='compute_belief_space_Qvalues')
-
-		# # Linear action belief space Q values:
-		# self.linear_belief_space_Qvalues = self.belief_space_Qvalues[:,:self.action_size]
-		# # Angular action belief space Q values: 
-		# self.angular_belief_space_Qvalues = self.belief_space_Qvalues[:,self.action_size:]
-
-		# # DON'T NEED TO EXPLICITLY COMPUTE SOFTMAX. tf.nn.softmax_cross_entropy...
-		# # # Softmax over belief space Q values.
-		# # self.softmax_belQ = tf.nn.softmax(self.belief_space_Qvalues)
-
-		# # Placeholder for targets.
-		# self.target_beta = tf.placeholder(tf.float32,shape=[None,self.action_size],name='target_actions')
-		# self.target_angular_beta = tf.placeholder(tf.float32,shape=[None,self.angular_action_size],name='target_angular_actions')
-
 		self.target_combined_beta = tf.placeholder(tf.float32,shape=[None,self.action_size+self.angular_action_size],name='target_combined_beta')
 
 		# Computing the loss: 
 		# THIS IS THE CROSS ENTROPY LOSS. 	
-		# self.linear_loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_beta,logits=self.linear_belief_space_Qvalues))
-		# self.angular_loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_angular_beta,logits=self.angular_belief_space_Qvalues))
-
-		# self.loss = tf.add(self.linear_loss,self.angular_loss,name="loss_accumulation")
-
 		self.loss = tf.reduce_sum(-tf.nn.softmax_cross_entropy_with_logits(labels=self.target_combined_beta,logits=self.belief_space_Qvalues))
-		# self.reg_variables = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-		# self.regularizer = tf.contrib.layers.l2_regularizer(scale=1000.0)
-		# print("scale:",1000)
-		# self.reg_term = tf.contrib.layers.apply_regularization(self.regularizer, self.reg_variables)
-		
-		# self.total_loss = self.reg_term + self.loss
-		# CREATING TRAINING VARIABLES:
-		# self.train = tf.train.AdamOptimizer(1e-4).minimize(self.total_loss,name='Adam_Optimizer')
 		self.train = tf.train.AdamOptimizer(1e-4).minimize(self.loss,name='Adam_Optimizer')
 
 		# CREATING SUMMARIES:
@@ -304,8 +259,11 @@ class QMDP_RCNN():
 		self.interp_angular_vel = npy.zeros((len(self.orig_vel)),dtype='int')
 		self.interp_angular_vel_percent = npy.zeros((len(self.orig_vel),2))
 
-		self.preprocess_canonical()
-		self.preprocess_angular()
+		self.interp_combined_betas = npy.zeros((len(self.orig_vel),8))
+
+		# self.preprocess_canonical()
+		# self.preprocess_angular()
+		self.preprocess_canonical_angular()
 		self.initialize_pointset()
 
 	def initialize_pointset(self):
@@ -531,6 +489,7 @@ class QMDP_RCNN():
 
 			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
 
+			# Going from -1 and 1 to indices 0 and 1.
 			r = self.interp_angular_vel[t].copy()
 			r += 1
 			r /= 2
@@ -581,6 +540,71 @@ class QMDP_RCNN():
 		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
 		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
 
+	def preprocess_canonical_angular(self):
+
+		self.orig_orient /= npy.pi
+
+		vel_norm_vector = npy.max(abs(self.orig_vel),axis=0)
+		self.orig_vel /= vel_norm_vector
+
+		ang_vel_norm_vector = npy.max(abs(self.orig_angular_vel),axis=0)
+		self.orig_angular_vel /= ang_vel_norm_vector
+			
+		for t in range(len(self.orig_orient)):
+			# Angular position
+			ang_split = self.angular_interpolate_coefficients(self.orig_orient[t])
+			count = 0
+
+			for percent, indices in ang_split:
+				self.interp_angular_traj[t,count] = indices
+				self.interp_angular_percent[t,count] = percent
+				count +=1
+
+			# Linear position
+			split = self.interpolate_coefficients(self.orig_traj[t],1)
+			count = 0
+
+			for percent, indices in split:
+				self.interp_traj[t,count] = indices
+				self.interp_traj_percent[t,count] = percent
+				count +=1
+
+			# Angular velocity
+			ang_vel = self.orig_angular_vel[t]
+			self.interp_angular_vel[t] = abs(ang_vel)/ang_vel
+
+			r = self.interp_angular_vel[t].copy()
+			r += 1
+			r /= 2
+
+			# Linear velocity
+			self.interp_angular_vel_percent[t,r] = abs(ang_vel)
+
+			# Action. 
+			vel = self.orig_vel[t]/npy.linalg.norm(self.orig_vel[t])
+
+			self.interp_vel[t,0] = [abs(vel[0])/vel[0],0,0]
+			self.interp_vel[t,1] = [0,abs(vel[1])/vel[1],0]
+			self.interp_vel[t,2] = [0,0,abs(vel[2])/vel[2]]
+			self.interp_vel_percent[t] = abs(vel)
+
+			self.interp_vel_percent[t] /= self.interp_vel_percent[t].sum()
+
+			self.interp_combined_betas[t,self.map_triplet_to_action_canonical(self.interp_vel[t,0])] = abs(self.orig_vel[t,0])
+			self.interp_combined_betas[t,self.map_triplet_to_action_canonical(self.interp_vel[t,1])] = abs(self.orig_vel[t,1])
+			self.interp_combined_betas[t,self.map_triplet_to_action_canonical(self.interp_vel[t,2])] = abs(self.orig_vel[t,2])
+			self.interp_combined_betas[t,self.action_size+r] = abs(ang_vel) 
+			self.interp_combined_betas/=self.interp_combined_betas.sum()
+
+		npy.save("Interp_Yaw.npy",self.interp_angular_traj)
+		npy.save("Interp_Yaw_Percent.npy",self.interp_angular_percent)
+		npy.save("Interp_YawRate.npy",self.interp_angular_vel)
+		npy.save("Interp_YawRate_Percent.npy",self.interp_angular_vel_percent)
+		npy.save("Interp_Traj.npy",self.interp_traj)
+		npy.save("Interp_Vel.npy",self.interp_vel)
+		npy.save("Interp_Traj_Percent.npy",self.interp_traj_percent)
+		npy.save("Interp_Vel_Percent.npy",self.interp_vel_percent)
+
 	def parse_data(self,timepoint):
 		# Setting from state belief from interp_traj.
 		# For each of the 8 grid points, set the value of belief = percent at that point. 
@@ -611,6 +635,8 @@ class QMDP_RCNN():
 
 		# Updating action counter of how many times each action was taken; not as important in the QMDP RCNN as BPRCNN.
 		# self.action_counter += self.beta
+
+		# self.target_combined_beta = self.interp_combined_betas[timepoint]
 
 		# MUST ALSO PARSE AND LOAD INPUT POINTCLOUDS.
 		self.observed_state = self.orig_traj[timepoint]
@@ -658,11 +684,8 @@ class QMDP_RCNN():
 
 		FILE_DIR = "/home/tanmay/Research/DeepVectorPolicyFields/Data/Gazebo/TF/D{0}/TFX".format(file_index+1)
 
-		feed_target_beta = self.beta.reshape((1,self.action_size))
-		feed_target_angular_beta = self.angular_beta.reshape((1,self.angular_action_size))
-		# feed_belief = npy.transpose(self.to_state_belief).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,1))
-		
-		# feed_input_volume = npy.transpose(self.input_volume).reshape((1,self.input_z,self.input_y,self.input_x,3))
+		feed_target_combined_beta = self.interp_combined_betas[timepoint].reshape((1,self.action_size+self.angular_action_size))
+
 		rt = str(timepoint)
 		rt = rt.rjust(4,'0')
 
@@ -672,7 +695,7 @@ class QMDP_RCNN():
 		feed_dummy_zeroes = npy.transpose(self.dummy_zeroes).reshape((1,self.discrete_z,self.discrete_y,self.discrete_x,self.discrete_theta,self.action_size+self.angular_action_size))
 
 		merged_summary, loss_value, reward_val, _ = self.sess.run([self.merged, self.loss, self.reward_reshape, self.train], \
-			feed_dict={self.input: feed_input_volume, self.target_beta: feed_target_beta, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes, self.target_angular_beta: feed_target_angular_beta})
+			feed_dict={self.input: feed_input_volume, self.belief: feed_belief, self.pre_Qvalues: feed_dummy_zeroes, self.target_combined_beta: feed_target_combined_beta})
 
 		return reward_val
 
@@ -706,7 +729,7 @@ def main(args):
 	# Create a TensorFlow session with limits on GPU usage.
 	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="0,3")
 	# gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="1,2")
-	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="2,3")
+	gpu_ops = tf.GPUOptions(allow_growth=True,visible_device_list="0,1")
 	config = tf.ConfigProto(gpu_options=gpu_ops)
 	sess = tf.Session(config=config)
 
