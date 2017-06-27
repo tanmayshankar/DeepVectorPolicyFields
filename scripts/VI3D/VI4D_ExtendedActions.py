@@ -38,7 +38,7 @@ class VI_RCNN():
 		self.beta = npy.zeros(self.action_size)
 
 		# Setting number of iterations
-		self.iterations = 1000
+		self.iterations = 100
 
 	def load_model(self, reward, trans):
 		# Loading reward and transition. 
@@ -58,10 +58,10 @@ class VI_RCNN():
 		# Construct extended value function - must extended along every dimension, then implement as a 4D Valid conv, instead of Same conv.
 		w = 1
 		self.extended_value = npy.zeros((self.discrete_x+2*w, self.discrete_y+2*w, self.discrete_z+2*w, self.discrete_yaw+2*w))
-		self.extended_value[w:-w,w:-w,w:-w,w:-w] = self.value_function
+		self.extended_value[w:-w,w:-w,w:-w,w:-w] = copy.deepcopy(self.value_function)
 		
-		self.extended_value[w:-w,w:-w,w:-w,0] = self.value_function[:,:,:,-1]
-		self.extended_value[w:-w,w:-w,w:-w,-1] = self.value_function[:,:,:,0]	
+		self.extended_value[w:-w,w:-w,w:-w,0] = copy.deepcopy(self.value_function[:,:,:,-1])
+		self.extended_value[w:-w,w:-w,w:-w,-1] = copy.deepcopy(self.value_function[:,:,:,0])
 
 		# Convolve.
 		for k in range(self.action_size+self.angular_action_size):
@@ -94,7 +94,6 @@ class VI_RCNN():
 			self.conv_layer()
 			self.reward_bias()
 			self.max_pool()		
-
 		self.soft_continuous_policy()
 
 	def soft_continuous_policy(self):
@@ -106,10 +105,15 @@ class VI_RCNN():
 		self.continuous_policy = npy.moveaxis(self.continuous_policy,0,-1)
 
 	def save_model(self):
-		npy.save("Planned_Policy_1000.npy",self.policy)
-		npy.save("Planned_Value_1000.npy",self.value_function)
-		npy.save("Planned_QValue_1000.npy",self.Qvalues)
-		npy.save("Continuous_Policy_1000.npy",self.continuous_policy)
+		npy.save("Planned_Policy.npy",self.policy)
+		npy.save("Planned_Value.npy",self.value_function)
+		npy.save("Planned_QValue.npy",self.Qvalues)
+		npy.save("Continuous_Policy.npy",self.continuous_policy)
+
+		# npy.save("Planned_Policy_alt.npy",self.policy)
+		# npy.save("Planned_Value_alt.npy",self.value_function)
+		# npy.save("Planned_QValue_alt.npy",self.Qvalues)
+		# npy.save("Continuous_Policy_alt.npy",self.continuous_policy)
 		print("SAVED MODELS.")
 
 def main(args):    
@@ -121,7 +125,7 @@ def main(args):
 	div = reward.max()-reward.min()
 	reward /= div
 
-	reward = reward[:,:,:,:,0,:]
+	# reward = reward[:,:,:,:,0,:]
 	# print(npy.isnan(reward).any())
 
 	trans = npy.load(str(sys.argv[2]))
